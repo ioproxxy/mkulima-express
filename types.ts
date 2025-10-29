@@ -17,6 +17,7 @@ export interface User {
   lng?: number;
   farmSize?: string;
   businessName?: string;
+  walletBalance: number;
 }
 
 export interface Produce {
@@ -43,6 +44,11 @@ export enum ContractStatus {
   CANCELLED = 'Cancelled',
 }
 
+export interface StatusHistory {
+  status: ContractStatus;
+  timestamp: string; // ISO string date
+}
+
 export interface Contract {
   id: string;
   produceId: string;
@@ -56,6 +62,23 @@ export interface Contract {
   deliveryDeadline: string;
   paymentDate?: string;
   status: ContractStatus;
+  statusHistory: StatusHistory[];
   disputeReason?: string;
   disputeFiledBy?: string;
+}
+
+export enum TransactionType {
+  DEPOSIT = 'Deposit',
+  WITHDRAWAL = 'Withdrawal',
+  PAYMENT_SENT = 'Payment Sent',
+  PAYMENT_RECEIVED = 'Payment Received',
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  date: string; // ISO string
+  type: TransactionType;
+  amount: number;
+  description: string;
 }

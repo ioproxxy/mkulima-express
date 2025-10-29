@@ -1,10 +1,10 @@
 
 
-
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
-import { User, UserRole, Produce, Contract, ContractStatus } from './types';
-import { mockUsers, mockProduce, mockContracts } from './constants';
+import { ToastContainer, toast, TypeOptions } from 'react-toastify';
+import { User, UserRole, Produce, Contract, ContractStatus, Transaction, TransactionType } from './types';
+import { mockUsers, mockProduce, mockContracts, mockTransactions } from './constants';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -23,10 +23,80 @@ const SearchIcon = ({ className }: { className?: string }) => <svg xmlns="http:/
 const Trash2Icon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/></svg>;
 const PlusIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 const XIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
+const EditIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const WalletIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M20 12V8H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg>;
 
+
+// --- DATA CONTEXT --- //
+interface DataContextType {
+  users: User[];
+  produce: Produce[];
+  contracts: Contract[];
+  transactions: Transaction[];
+  updateUser: (updatedUser: User) => void;
+  updateContract: (updatedContract: Contract) => void;
+  addContract: (newContract: Contract) => void;
+  addProduce: (newProduce: Produce) => void;
+  addUser: (newUser: User) => User;
+  addTransaction: (newTransaction: Transaction) => void;
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+}
+
+const DataContext = createContext<DataContextType | null>(null);
+
+const DataProvider = ({ children }: { children: React.ReactNode }) => {
+  const [users, setUsers] = useState<User[]>(Object.values(mockUsers));
+  const [contracts, setContracts] = useState<Contract[]>(mockContracts);
+  const [produce, setProduce] = useState<Produce[]>(mockProduce);
+  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+
+  const updateUser = (updatedUser: User) => {
+    setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+  };
+
+  const updateContract = (updatedContract: Contract) => {
+    setContracts(prevContracts => prevContracts.map(c => c.id === updatedContract.id ? updatedContract : c));
+  };
+  
+  const addContract = (newContract: Contract) => {
+    setContracts(prev => [newContract, ...prev]);
+  };
+
+  const addProduce = (newProduce: Produce) => {
+    setProduce(prev => [newProduce, ...prev]);
+  }
+
+  const addUser = (newUser: User) => {
+    setUsers(prev => [...prev, newUser]);
+    return newUser;
+  }
+  
+  const addTransaction = (newTransaction: Transaction) => {
+    setTransactions(prev => [newTransaction, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+  };
+
+  const value = useMemo(() => ({
+    users, produce, contracts, transactions,
+    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, setUsers
+  }), [users, produce, contracts, transactions]);
+
+  return (
+    <DataContext.Provider value={value}>
+      {children}
+    </DataContext.Provider>
+  );
+};
+
+const useData = () => {
+    const context = useContext(DataContext);
+    if (!context) {
+      throw new Error('useData must be used within a DataProvider');
+    }
+    return context;
+};
 
 // --- AUTHENTICATION CONTEXT --- //
-type UserRegistrationData = Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl'>;
+type UserRegistrationData = Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>;
 
 interface AuthContextType {
   user: User | null;
@@ -39,13 +109,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const { users, addUser } = useData();
 
   const login = (email: string, password: string): boolean => {
-    const allUsers = Object.values(mockUsers);
-    const foundUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    // In a real app, you'd check the hashed password here.
-    // For this mock-up, any password is valid if the email exists.
+    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (foundUser) {
         setUser(foundUser);
         return true;
@@ -60,17 +127,17 @@ const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
       rating: 0,
       reviews: 0,
       avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
+      walletBalance: 0,
     };
-    // This is not ideal for a real app, but for mock purposes:
-    mockUsers[newUser.id] = newUser; 
-    setUser(newUser);
+    const addedUser = addUser(newUser);
+    setUser(addedUser);
   };
 
   const logout = () => {
     setUser(null);
   };
 
-  const value = useMemo(() => ({ user, login, logout, register }), [user]);
+  const value = useMemo(() => ({ user, login, logout, register }), [user, users]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -82,6 +149,36 @@ const useAuth = () => {
   }
   return context;
 };
+
+// --- NOTIFICATION CONTEXT --- //
+interface NotificationContextType {
+  notify: (message: string, type?: TypeOptions) => void;
+}
+
+const NotificationContext = createContext<NotificationContextType | null>(null);
+
+const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
+  const notify = (message: string, type: TypeOptions = 'info') => {
+    toast(message, { type, position: "top-center" });
+  };
+
+  const value = useMemo(() => ({ notify }), []);
+
+  return (
+    <NotificationContext.Provider value={value}>
+      {children}
+    </NotificationContext.Provider>
+  );
+};
+
+const useNotifier = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifier must be used within a NotificationProvider');
+  }
+  return context;
+};
+
 
 // --- ROUTING --- //
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
@@ -119,7 +216,7 @@ const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300">
-      <img src={produce.imageUrl} alt={produce.name} className="w-full h-32 object-cover" />
+      <img src={produce.imageUrl} alt={produce.name} className="w-full h-48 object-cover" />
       <div className="p-4">
         <h3 className="text-lg font-bold text-gray-800">{produce.name}</h3>
         <p className="text-sm text-gray-500">{produce.type}</p>
@@ -238,12 +335,20 @@ const Layout = ({ children, showNav = true }: { children?: React.ReactNode, show
 };
 
 const BottomNav = () => {
+  const { user } = useAuth();
+
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/produce', label: 'Produce', icon: LeafIcon },
     { path: '/contracts', label: 'Contracts', icon: FileTextIcon },
-    { path: '/profile', label: 'Profile', icon: UserIcon },
   ];
+
+  if (user?.role !== UserRole.ADMIN) {
+      navItems.push({ path: '/wallet', label: 'Wallet', icon: WalletIcon });
+  }
+  
+  navItems.push({ path: '/profile', label: 'Profile', icon: UserIcon });
+
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 shadow-t-md">
@@ -293,10 +398,19 @@ const LoginModal = ({
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const navigate = useNavigate();
+
+    const roleConfig = {
+        [UserRole.FARMER]: {
+            demoUser: 'juma.mwangi@example.com',
+        },
+        [UserRole.VENDOR]: {
+            demoUser: 'aisha.omar@example.com',
+        },
+    };
 
     const handleRoleSelect = (role: UserRole.FARMER | UserRole.VENDOR) => {
         setSelectedRole(role);
+        setEmail(roleConfig[role].demoUser);
         setStep('form');
         setError('');
     };
@@ -314,15 +428,6 @@ const LoginModal = ({
         } else {
             setError('Invalid email or password.');
         }
-    };
-
-    const roleConfig = {
-        [UserRole.FARMER]: {
-            demoUser: 'juma.mwangi@example.com',
-        },
-        [UserRole.VENDOR]: {
-            demoUser: 'aisha.omar@example.com',
-        },
     };
 
     return (
@@ -386,14 +491,25 @@ const LoginModal = ({
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="you@example.com"
                             />
-                            <InputField
-                                label="Password"
-                                name="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                            />
+                            <div>
+                                <InputField
+                                    label="Password"
+                                    name="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                />
+                                 <div className="text-right mt-1">
+                                    <Link 
+                                      to="/forgot-password" 
+                                      onClick={onClose} 
+                                      className="text-sm font-medium text-green-600 hover:text-green-700"
+                                    >
+                                        Forgot Password?
+                                    </Link>
+                                </div>
+                            </div>
                             {error && <p className="text-sm text-red-600 text-center">{error}</p>}
                             <button
                                 type="submit"
@@ -470,6 +586,7 @@ const AdminLoginScreen = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, login } = useAuth();
+    const { users } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -490,8 +607,7 @@ const AdminLoginScreen = () => {
             return;
         }
 
-        const allUsers = Object.values(mockUsers);
-        const foundUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+        const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
         if (foundUser && foundUser.role !== UserRole.ADMIN) {
              setError('This login is for administrators only.');
@@ -548,6 +664,50 @@ const AdminLoginScreen = () => {
                 </div>
             </div>
         </div>
+    );
+};
+
+const ForgotPasswordScreen = () => {
+    const navigate = useNavigate();
+    const { notify } = useNotifier();
+    const [email, setEmail] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email) {
+            notify("Please enter your email address.", "warning");
+            return;
+        }
+        notify(`If an account exists for ${email}, a password reset link has been sent.`, "success");
+        navigate('/login');
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title="Forgot Password" showBack={true} />
+            <div className="p-4">
+                <div className="bg-white p-6 rounded-lg shadow-md mt-4">
+                    <h2 className="text-xl font-semibold text-center text-gray-700 mb-2">Reset Your Password</h2>
+                    <p className="text-center text-gray-500 mb-6 text-sm">Enter your email address and we'll send you a link to reset your password.</p>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <InputField
+                            label="Email Address"
+                            name="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                        />
+                        <button
+                            type="submit"
+                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                        >
+                            Send Reset Link
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </Layout>
     );
 };
 
@@ -711,12 +871,13 @@ const DashboardScreen = () => {
 
 const FarmerVendorDashboardScreen = () => {
     const { user } = useAuth();
+    const { contracts, users } = useData();
     if (!user) return null;
 
     const isFarmer = user.role === UserRole.FARMER;
     const isVendor = user.role === UserRole.VENDOR;
 
-    const userContracts = mockContracts.filter(c => isFarmer ? c.farmerId === user.id : c.vendorId === user.id);
+    const userContracts = contracts.filter(c => isFarmer ? c.farmerId === user.id : c.vendorId === user.id);
     const activeContracts = userContracts.filter(c => c.status === ContractStatus.ACTIVE).length;
     
     const totalRevenue = isFarmer ? userContracts
@@ -738,8 +899,7 @@ const FarmerVendorDashboardScreen = () => {
     ];
     
     const recentContract = userContracts.sort((a,b) => new Date(b.deliveryDeadline).getTime() - new Date(a.deliveryDeadline).getTime())[0];
-    const allUsers = Object.values(mockUsers);
-
+    
     return (
         <Layout>
             <Header title="Dashboard" />
@@ -770,7 +930,7 @@ const FarmerVendorDashboardScreen = () => {
 
                 <div>
                     <h3 className="text-lg font-bold text-gray-700 mb-2">User Locations</h3>
-                    <MapView users={allUsers} currentUserId={user.id} />
+                    <MapView users={users} currentUserId={user.id} />
                 </div>
             </div>
         </Layout>
@@ -779,26 +939,27 @@ const FarmerVendorDashboardScreen = () => {
 
 const AdminDashboardScreen = () => {
     const [activeTab, setActiveTab] = useState('disputes');
-    const [users, setUsers] = useState(Object.values(mockUsers));
+    const { users, contracts, produce, setUsers } = useData();
     const [searchTerm, setSearchTerm] = useState('');
     const navigate = useNavigate();
+    const { notify } = useNotifier();
 
     const stats = {
         users: users.length,
-        produce: mockProduce.length,
-        contracts: mockContracts.length,
-        disputes: mockContracts.filter(c => c.status === ContractStatus.DISPUTED).length,
+        produce: produce.length,
+        contracts: contracts.length,
+        disputes: contracts.filter(c => c.status === ContractStatus.DISPUTED).length,
     };
 
     const handleDeleteUser = (userId: string, userName: string) => {
         if (window.confirm(`Are you sure you want to delete user ${userName}? This action cannot be undone.`)) {
             // Can't delete the admin account
             if (userId === 'admin-01') {
-                alert("Cannot delete the primary admin account.");
+                notify("Cannot delete the primary admin account.", "error");
                 return;
             }
-            delete mockUsers[userId];
-            setUsers(Object.values(mockUsers));
+            setUsers(currentUsers => currentUsers.filter(u => u.id !== userId));
+            notify(`User ${userName} has been deleted.`, "success");
         }
     };
 
@@ -813,13 +974,13 @@ const AdminDashboardScreen = () => {
     );
     
     const filteredContracts = useMemo(() => {
-        if (!searchTerm) return mockContracts;
-        return mockContracts.filter(c =>
+        if (!searchTerm) return contracts;
+        return contracts.filter(c =>
             c.produceName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             c.vendorName.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [searchTerm]);
+    }, [searchTerm, contracts]);
 
     const AdminStatCard = ({ value, label }: { value: number, label: string }) => (
         <div className="bg-white p-3 rounded-lg shadow-md text-center">
@@ -849,7 +1010,7 @@ const AdminDashboardScreen = () => {
                         {activeTab === 'disputes' && (
                             <div>
                                 {stats.disputes > 0 ? (
-                                    mockContracts.filter(c => c.status === ContractStatus.DISPUTED).map(contract => (
+                                    contracts.filter(c => c.status === ContractStatus.DISPUTED).map(contract => (
                                         <ContractCard key={contract.id} contract={contract} />
                                     ))
                                 ) : (
@@ -910,18 +1071,19 @@ const AdminDashboardScreen = () => {
 
 const ProduceListScreen = () => {
     const { user } = useAuth();
+    const { produce } = useData();
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredProduce = useMemo(() => {
         if (!searchTerm) {
-            return mockProduce;
+            return produce;
         }
-        return mockProduce.filter(produce =>
-            produce.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            produce.type.toLowerCase().includes(searchTerm.toLowerCase())
+        return produce.filter(p =>
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.type.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [searchTerm, mockProduce]);
+    }, [searchTerm, produce]);
 
     return (
         <Layout>
@@ -942,8 +1104,8 @@ const ProduceListScreen = () => {
                 </div>
                 {filteredProduce.length > 0 ? (
                     <div className="grid grid-cols-1 gap-4">
-                        {filteredProduce.map(produce => (
-                            <ProduceCard key={produce.id} produce={produce} />
+                        {filteredProduce.map(p => (
+                            <ProduceCard key={p.id} produce={p} />
                         ))}
                     </div>
                 ) : (
@@ -968,7 +1130,9 @@ const ProduceListScreen = () => {
 
 const AddProduceScreen = () => {
     const { user } = useAuth();
+    const { addProduce } = useData();
     const navigate = useNavigate();
+    const { notify } = useNotifier();
     const [formData, setFormData] = useState({
         name: '',
         type: '',
@@ -1019,13 +1183,13 @@ const AddProduceScreen = () => {
             quantity,
             pricePerKg,
             location: user.location,
-            imageUrl: `https://picsum.photos/seed/${formData.name.replace(/\s/g, '-') || Date.now()}/400/300`,
+            imageUrl: `https://picsum.photos/seed/${formData.name.replace(/\s/g, '-') || Date.now()}/800/600`,
             description: formData.description,
             harvestDate: formData.harvestDate,
         };
 
-        mockProduce.unshift(newProduce); // Add to the beginning of the array
-        alert('Produce listed successfully!');
+        addProduce(newProduce);
+        notify('Produce listed successfully!', 'success');
         navigate('/produce');
     };
 
@@ -1036,6 +1200,26 @@ const AddProduceScreen = () => {
                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
                     <InputField label="Produce Name" name="name" value={formData.name} onChange={handleChange} placeholder="e.g., Fresh Tomatoes" />
                     <InputField label="Produce Type" name="type" value={formData.type} onChange={handleChange} placeholder="e.g., Fruit" />
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Produce Image</label>
+                        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                          <div className="space-y-1 text-center">
+                            <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            <div className="flex text-sm text-gray-600">
+                              <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500">
+                                <span>Upload a file</span>
+                                <input id="file-upload" name="file-upload" type="file" className="sr-only" />
+                              </label>
+                              <p className="pl-1">or drag and drop</p>
+                            </div>
+                            <p className="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                          </div>
+                        </div>
+                    </div>
+                    
                     <InputField label="Quantity (kg)" name="quantity" type="number" value={formData.quantity} onChange={handleChange} placeholder="e.g., 100" />
                     <InputField label="Price per kg (KES)" name="pricePerKg" type="number" value={formData.pricePerKg} onChange={handleChange} placeholder="e.g., 90" />
                     <div>
@@ -1075,22 +1259,71 @@ const AddProduceScreen = () => {
 
 const ContractsScreen = () => {
     const { user } = useAuth();
+    const { contracts } = useData();
     if (!user) return null;
+
+    const [selectedStatuses, setSelectedStatuses] = useState<ContractStatus[]>([]);
 
     const isFarmer = user.role === UserRole.FARMER;
     const isAdmin = user.role === UserRole.ADMIN;
-    const userContracts = isAdmin ? mockContracts : mockContracts.filter(c => isFarmer ? c.farmerId === user.id : c.vendorId === user.id);
+    const userContracts = isAdmin ? contracts : contracts.filter(c => isFarmer ? c.farmerId === user.id : c.vendorId === user.id);
+
+    const handleStatusToggle = (status: ContractStatus) => {
+        setSelectedStatuses(prev =>
+            prev.includes(status)
+                ? prev.filter(s => s !== status)
+                : [...prev, status]
+        );
+    };
+    
+    const filteredAndSortedContracts = useMemo(() => {
+        const filtered = selectedStatuses.length === 0
+            ? userContracts
+            : userContracts.filter(contract => selectedStatuses.includes(contract.status));
+        return filtered.sort((a,b) => new Date(b.deliveryDeadline).getTime() - new Date(a.deliveryDeadline).getTime());
+    }, [userContracts, selectedStatuses]);
 
     return (
         <Layout>
             <Header title="My Contracts" />
             <div className="p-4">
-                {userContracts.length > 0 ? (
-                    userContracts.map(contract => <ContractCard key={contract.id} contract={contract} />)
+                <div className="bg-white p-4 rounded-lg shadow-md mb-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="font-semibold text-gray-700">Filter by Status</h4>
+                        {selectedStatuses.length > 0 && (
+                            <button
+                                onClick={() => setSelectedStatuses([])}
+                                className="text-sm font-semibold text-red-500 hover:text-red-700"
+                            >
+                                Clear All
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {Object.values(ContractStatus).map(status => (
+                            <button
+                                key={status}
+                                onClick={() => handleStatusToggle(status)}
+                                className={`px-3 py-1 text-xs font-semibold rounded-full border-2 transition-colors ${
+                                    selectedStatuses.includes(status)
+                                        ? `border-green-600 bg-green-100 text-green-800`
+                                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-100'
+                                }`}
+                            >
+                                {status}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {filteredAndSortedContracts.length > 0 ? (
+                    filteredAndSortedContracts.map(contract => <ContractCard key={contract.id} contract={contract} />)
                 ) : (
                     <div className="text-center text-gray-500 mt-16">
                         <FileTextIcon className="w-16 h-16 mx-auto text-gray-300" />
-                        <p className="mt-4">You have no contracts yet.</p>
+                        <p className="mt-4">
+                            {userContracts.length > 0 ? "No contracts match your filters." : "You have no contracts yet."}
+                        </p>
                     </div>
                 )}
             </div>
@@ -1102,18 +1335,20 @@ const ContractFormScreen = () => {
     const { produceId } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { produce, addContract } = useData();
+    const { notify } = useNotifier();
 
-    const produce = mockProduce.find(p => p.id === produceId);
+    const currentProduce = produce.find(p => p.id === produceId);
 
     const [quantity, setQuantity] = useState('');
     const [deadline, setDeadline] = useState('');
     const [error, setError] = useState('');
 
-    if (!produce || !user) {
+    if (!currentProduce || !user) {
         return <Navigate to="/produce" replace />;
     }
 
-    const totalPrice = (parseFloat(quantity) || 0) * produce.pricePerKg;
+    const totalPrice = (parseFloat(quantity) || 0) * currentProduce.pricePerKg;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1122,8 +1357,8 @@ const ContractFormScreen = () => {
             setError('Please enter a valid quantity.');
             return;
         }
-        if (numQuantity > produce.quantity) {
-            setError(`Quantity cannot exceed available ${produce.quantity} kg.`);
+        if (numQuantity > currentProduce.quantity) {
+            setError(`Quantity cannot exceed available ${currentProduce.quantity} kg.`);
             return;
         }
         if (!deadline) {
@@ -1133,20 +1368,23 @@ const ContractFormScreen = () => {
         
         const newContract: Contract = {
             id: `contract-${Date.now()}`,
-            produceId: produce.id,
-            produceName: produce.name,
-            farmerId: produce.farmerId,
+            produceId: currentProduce.id,
+            produceName: currentProduce.name,
+            farmerId: currentProduce.farmerId,
             vendorId: user.id,
-            farmerName: produce.farmerName,
+            farmerName: currentProduce.farmerName,
             vendorName: user.name,
             quantity: numQuantity,
             totalPrice: totalPrice,
             deliveryDeadline: deadline,
             status: ContractStatus.PENDING,
+            statusHistory: [
+                { status: ContractStatus.PENDING, timestamp: new Date().toISOString() }
+            ],
         };
 
-        mockContracts.unshift(newContract);
-        alert('Contract offer submitted successfully!');
+        addContract(newContract);
+        notify('Your contract offer has been sent to the farmer!', 'success');
         navigate('/contracts');
     };
 
@@ -1155,9 +1393,9 @@ const ContractFormScreen = () => {
             <Header title="Create Contract Offer" showBack={true} />
             <div className="p-4 space-y-4">
                 <div className="bg-white p-4 rounded-lg shadow-md">
-                    <h3 className="text-lg font-bold text-gray-800">{produce.name}</h3>
-                    <p className="text-sm text-gray-500">From: {produce.farmerName}</p>
-                    <p className="text-sm text-gray-500">Available: {produce.quantity} kg at KES {produce.pricePerKg}/kg</p>
+                    <h3 className="text-lg font-bold text-gray-800">{currentProduce.name}</h3>
+                    <p className="text-sm text-gray-500">From: {currentProduce.farmerName}</p>
+                    <p className="text-sm text-gray-500">Available: {currentProduce.quantity} kg at KES {currentProduce.pricePerKg}/kg</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-md space-y-4">
@@ -1172,7 +1410,7 @@ const ContractFormScreen = () => {
                                 setError('');
                             }}
                             placeholder="e.g., 50"
-                            max={produce.quantity}
+                            max={currentProduce.quantity}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
                         />
                     </div>
@@ -1218,67 +1456,165 @@ const ContractFormScreen = () => {
     );
 };
 
+const formatDate = (isoString: string) => {
+    const date = new Date(isoString);
+    return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
+
 const ContractDetailsScreen = () => {
     const { contractId } = useParams();
     const { user } = useAuth();
+    const { contracts, users, produce, updateContract, updateUser, addTransaction } = useData();
     const navigate = useNavigate();
+    const { notify } = useNotifier();
     
-    const contract = mockContracts.find(c => c.id === contractId);
+    const contract = contracts.find(c => c.id === contractId);
     
-    // Using a state to manage status changes and re-render the component
     const [currentContract, setCurrentContract] = useState(contract);
+    const [isEditingDispute, setIsEditingDispute] = useState(false);
+    const [editedDisputeReason, setEditedDisputeReason] = useState(contract?.disputeReason || '');
+    const [editedDisputeFiledBy, setEditedDisputeFiledBy] = useState(contract?.disputeFiledBy || '');
+
+    useEffect(() => {
+        const foundContract = contracts.find(c => c.id === contractId);
+        if (foundContract) {
+            setCurrentContract(foundContract);
+            setEditedDisputeReason(foundContract.disputeReason || '');
+            setEditedDisputeFiledBy(foundContract.disputeFiledBy || '');
+            setIsEditingDispute(false);
+        }
+    }, [contractId, contracts]);
 
     if (!currentContract || !user) {
         return <Navigate to="/contracts" replace />;
     }
 
-    const produce = mockProduce.find(p => p.id === currentContract.produceId);
-    const farmer = Object.values(mockUsers).find(u => u.id === currentContract.farmerId);
-    const vendor = Object.values(mockUsers).find(u => u.id === currentContract.vendorId);
+    const sortedStatusHistory = useMemo(() => {
+        return [...(currentContract.statusHistory || [])].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    }, [currentContract.statusHistory]);
+
+    const currentProduce = produce.find(p => p.id === currentContract.produceId);
+    const farmer = users.find(u => u.id === currentContract.farmerId);
+    const vendor = users.find(u => u.id === currentContract.vendorId);
     
-    if (!produce || !farmer || !vendor) {
+    if (!currentProduce || !farmer || !vendor) {
         return <p>Loading contract details...</p> // Or a proper error component
     }
 
-    const updateContractInMockDB = (updatedContract: Contract) => {
-        const contractIndex = mockContracts.findIndex(c => c.id === currentContract.id);
-        if(contractIndex !== -1) {
-          mockContracts[contractIndex] = updatedContract;
-        }
-        setCurrentContract(updatedContract);
-    };
-
     const handleUpdateStatus = (newStatus: ContractStatus) => {
-        const updatedContract = { ...currentContract, status: newStatus };
-        if (newStatus === ContractStatus.COMPLETED) {
-          updatedContract.paymentDate = new Date().toISOString().split('T')[0];
+        const newHistoryEntry = { status: newStatus, timestamp: new Date().toISOString() };
+        const updatedContract = {
+            ...currentContract,
+            status: newStatus,
+            statusHistory: [...(currentContract.statusHistory || []), newHistoryEntry]
+        };
+
+        let notificationMessage = '';
+        let notificationType: TypeOptions = 'info';
+
+        switch (newStatus) {
+            case ContractStatus.ACTIVE:
+                notificationMessage = 'Offer accepted!';
+                notificationType = 'success';
+                break;
+            case ContractStatus.CANCELLED:
+                if (currentContract.status === ContractStatus.PENDING) {
+                    notificationMessage = 'Contract offer declined.';
+                } else if (currentContract.status === ContractStatus.DISPUTED) {
+                    notificationMessage = 'Dispute resolved in favor of the vendor. Contract is cancelled.';
+                } else {
+                    notificationMessage = 'Contract cancelled.';
+                }
+                break;
+            case ContractStatus.DELIVERY_CONFIRMED:
+                notificationMessage = 'Delivery confirmed by farmer.';
+                notificationType = 'success';
+                break;
+            case ContractStatus.COMPLETED:
+                if (currentContract.status === ContractStatus.DELIVERY_CONFIRMED) {
+                    if (vendor.walletBalance < currentContract.totalPrice) {
+                        notify("Insufficient wallet balance to release payment.", "error");
+                        return;
+                    }
+                    const updatedVendor = { ...vendor, walletBalance: vendor.walletBalance - currentContract.totalPrice };
+                    const updatedFarmer = { ...farmer, walletBalance: farmer.walletBalance + currentContract.totalPrice };
+                    updateUser(updatedVendor);
+                    updateUser(updatedFarmer);
+                    
+                    const paymentDate = new Date().toISOString();
+                    addTransaction({
+                        id: `txn-${Date.now()}-v`, userId: vendor.id, date: paymentDate,
+                        type: TransactionType.PAYMENT_SENT, amount: -currentContract.totalPrice,
+                        description: `Payment for ${currentContract.produceName}`,
+                    });
+                    addTransaction({
+                        id: `txn-${Date.now()}-f`, userId: farmer.id, date: paymentDate,
+                        type: TransactionType.PAYMENT_RECEIVED, amount: currentContract.totalPrice,
+                        description: `Payment from ${vendor.name}`,
+                    });
+
+                    notificationMessage = 'Payment released. Contract is now complete!';
+                    updatedContract.paymentDate = new Date().toISOString().split('T')[0];
+                } else if (currentContract.status === ContractStatus.DISPUTED) {
+                    notificationMessage = 'Dispute resolved in favor of the farmer. Contract is complete!';
+                    updatedContract.paymentDate = new Date().toISOString().split('T')[0];
+                }
+                notificationType = 'success';
+                break;
         }
-        updateContractInMockDB(updatedContract);
+
+        updateContract(updatedContract);
+
+        if (notificationMessage) {
+            notify(notificationMessage, notificationType);
+        }
     };
 
     const handleFileDispute = () => {
         const reason = window.prompt("Please state the reason for this dispute:");
         if (reason && reason.trim()) {
+            const newHistoryEntry = { status: ContractStatus.DISPUTED, timestamp: new Date().toISOString() };
             const updatedContract = {
                 ...currentContract,
                 status: ContractStatus.DISPUTED,
+                statusHistory: [...(currentContract.statusHistory || []), newHistoryEntry],
                 disputeReason: reason.trim(),
                 disputeFiledBy: user.name,
             };
-            updateContractInMockDB(updatedContract);
+            updateContract(updatedContract);
+            notify('Dispute filed successfully.', 'warning');
         }
+    };
+
+    const handleStartEditDispute = () => {
+        setEditedDisputeReason(currentContract.disputeReason || '');
+        setEditedDisputeFiledBy(currentContract.disputeFiledBy || '');
+        setIsEditingDispute(true);
+    };
+
+    const handleSaveDispute = () => {
+        if (!editedDisputeReason.trim() || !editedDisputeFiledBy.trim()) {
+            notify('Dispute reason and filer cannot be empty.', 'error');
+            return;
+        }
+        const updatedContract = {
+            ...currentContract,
+            disputeReason: editedDisputeReason.trim(),
+            disputeFiledBy: editedDisputeFiledBy.trim(),
+        };
+        updateContract(updatedContract);
+        notify('Dispute details updated successfully.', 'success');
+        setIsEditingDispute(false);
+    };
+
+    const handleCancelEditDispute = () => {
+        setIsEditingDispute(false);
+        setEditedDisputeReason(currentContract.disputeReason || '');
+        setEditedDisputeFiledBy(currentContract.disputeFiledBy || '');
     };
     
     const canTrackDelivery = [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED].includes(currentContract.status);
     const canFileDispute = user.role !== UserRole.ADMIN && [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED].includes(currentContract.status);
-
-    const statusTimeline = [
-        { status: ContractStatus.PENDING, text: 'Offer Sent', completed: true },
-        { status: ContractStatus.ACTIVE, text: 'Contract Active', completed: [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED, ContractStatus.PAYMENT_RELEASED, ContractStatus.COMPLETED, ContractStatus.DISPUTED].includes(currentContract.status) },
-        { status: ContractStatus.DELIVERY_CONFIRMED, text: 'Delivery Confirmed', completed: [ContractStatus.DELIVERY_CONFIRMED, ContractStatus.PAYMENT_RELEASED, ContractStatus.COMPLETED].includes(currentContract.status) },
-        { status: ContractStatus.PAYMENT_RELEASED, text: 'Payment Released', completed: [ContractStatus.PAYMENT_RELEASED, ContractStatus.COMPLETED].includes(currentContract.status) },
-        { status: ContractStatus.COMPLETED, text: 'Completed', completed: currentContract.status === ContractStatus.COMPLETED },
-    ];
 
     const UserDetailCard = ({ user: profileUser }: { user: User }) => (
       <div className="flex items-start justify-between">
@@ -1309,15 +1645,15 @@ const ContractDetailsScreen = () => {
             <div className="p-4 space-y-4 pb-24">
                 {/* Produce Info */}
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <img src={produce.imageUrl} alt={produce.name} className="w-full h-32 object-cover" />
+                    <img src={currentProduce.imageUrl} alt={currentProduce.name} className="w-full h-48 object-cover" />
                     <div className="p-4">
                         <div className="flex justify-between items-start">
-                            <h3 className="text-lg font-bold text-gray-800 flex-1 pr-2">{produce.name}</h3>
+                            <h3 className="text-lg font-bold text-gray-800 flex-1 pr-2">{currentProduce.name}</h3>
                             <span className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(currentContract.status)} flex-shrink-0`}>{currentContract.status}</span>
                         </div>
                         <div className="mt-4 pt-4 border-t">
                             <h4 className="font-semibold text-gray-700 mb-1">Produce Description</h4>
-                            <p className="text-sm text-gray-600">{produce.description}</p>
+                            <p className="text-sm text-gray-600">{currentProduce.description}</p>
                         </div>
                     </div>
                 </div>
@@ -1325,18 +1661,67 @@ const ContractDetailsScreen = () => {
                  {/* Dispute Info */}
                 {currentContract.status === ContractStatus.DISPUTED && (
                     <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
-                        <div className="flex items-center mb-2">
-                             <ShieldAlertIcon className="w-6 h-6 text-orange-600 mr-2" />
-                             <h4 className="font-bold text-orange-700 text-lg">Dispute Information</h4>
+                        <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center">
+                                <ShieldAlertIcon className="w-6 h-6 text-orange-600 mr-2" />
+                                <h4 className="font-bold text-orange-700 text-lg">Dispute Information</h4>
+                             </div>
+                             {user.role === UserRole.ADMIN && !isEditingDispute && (
+                                <button 
+                                    onClick={handleStartEditDispute} 
+                                    className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-800"
+                                    aria-label="Edit dispute"
+                                >
+                                    <EditIcon className="w-4 h-4 mr-1"/>
+                                    Edit
+                                </button>
+                            )}
                         </div>
-                        <p className="text-sm text-gray-500">Filed by: <span className="font-semibold text-gray-700">{currentContract.disputeFiledBy}</span></p>
-                        <p className="mt-2 text-gray-700 italic">"{currentContract.disputeReason}"</p>
+                        
+                        {isEditingDispute ? (
+                            <div className="space-y-2 mt-2">
+                                <div>
+                                    <label htmlFor="disputeFiledBy" className="text-sm font-medium text-gray-700">Filed by:</label>
+                                    <input 
+                                        id="disputeFiledBy"
+                                        type="text" 
+                                        value={editedDisputeFiledBy}
+                                        onChange={(e) => setEditedDisputeFiledBy(e.target.value)}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="disputeReason" className="text-sm font-medium text-gray-700">Reason:</label>
+                                    <textarea
+                                        id="disputeReason"
+                                        value={editedDisputeReason}
+                                        onChange={(e) => setEditedDisputeReason(e.target.value)}
+                                        rows={3}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-sm text-gray-500">Filed by: <span className="font-semibold text-gray-700">{currentContract.disputeFiledBy}</span></p>
+                                <p className="mt-2 text-gray-700 italic">"{currentContract.disputeReason}"</p>
+                            </>
+                        )}
                         
                         {user.role === UserRole.ADMIN && (
-                          <div className="mt-4 pt-4 border-t flex space-x-2">
-                            <button onClick={() => handleUpdateStatus(ContractStatus.CANCELLED)} className="w-full bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 text-sm">Resolve for Vendor</button>
-                            <button onClick={() => handleUpdateStatus(ContractStatus.COMPLETED)} className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 text-sm">Resolve for Farmer</button>
-                          </div>
+                            <div className="mt-4 pt-4 border-t flex space-x-2">
+                                {isEditingDispute ? (
+                                    <>
+                                        <button onClick={handleCancelEditDispute} className="w-full bg-gray-200 text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-300 text-sm">Cancel</button>
+                                        <button onClick={handleSaveDispute} className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 text-sm">Save Changes</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button onClick={() => handleUpdateStatus(ContractStatus.CANCELLED)} className="w-full bg-red-500 text-white py-2 rounded-lg font-semibold hover:bg-red-600 text-sm">Resolve for Vendor</button>
+                                        <button onClick={() => handleUpdateStatus(ContractStatus.COMPLETED)} className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 text-sm">Resolve for Farmer</button>
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
                 )}
@@ -1376,16 +1761,30 @@ const ContractDetailsScreen = () => {
                 {/* Status Timeline */}
                 <div className="bg-white p-4 rounded-lg shadow-md">
                      <h4 className="font-bold text-gray-800 mb-4">Status History</h4>
-                     <div className="space-y-4">
-                        {statusTimeline.map((item, index) => (
-                            <div key={index} className="flex items-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.completed ? 'bg-green-500' : 'bg-gray-300'}`}>
-                                    <CheckCircleIcon className="w-5 h-5 text-white"/>
-                                </div>
-                                <p className={`ml-4 font-medium ${item.completed ? 'text-gray-800' : 'text-gray-400'}`}>{item.text}</p>
-                            </div>
-                        ))}
-                     </div>
+                    <div className="flow-root">
+                        <ul className="-mb-8">
+                            {sortedStatusHistory.map((item, index, arr) => (
+                                <li key={index}>
+                                    <div className="relative pb-8">
+                                        {index !== arr.length - 1 ? (
+                                            <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                        ) : null}
+                                        <div className="relative flex items-start space-x-3">
+                                            <div>
+                                                <span className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                                                    <CheckCircleIcon className="h-5 w-5 text-white" />
+                                                </span>
+                                            </div>
+                                            <div className="min-w-0 flex-1 pt-1.5">
+                                                <div className="text-sm font-medium text-gray-800">{item.status}</div>
+                                                <p className="mt-0.5 text-sm text-gray-500">{formatDate(item.timestamp)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -1422,14 +1821,15 @@ const ContractDetailsScreen = () => {
 
 const MapTrackingScreen = () => {
     const { contractId } = useParams();
-    const contract = mockContracts.find(c => c.id === contractId);
+    const { contracts, users } = useData();
+    const contract = contracts.find(c => c.id === contractId);
 
     if (!contract) {
         return <Navigate to="/contracts" replace />;
     }
 
-    const farmer = Object.values(mockUsers).find(u => u.id === contract.farmerId);
-    const vendor = Object.values(mockUsers).find(u => u.id === contract.vendorId);
+    const farmer = users.find(u => u.id === contract.farmerId);
+    const vendor = users.find(u => u.id === contract.vendorId);
     
     if (!farmer || !vendor) {
         return <p>Loading map...</p>;
@@ -1505,12 +1905,11 @@ const MapTrackingScreen = () => {
 const UserProfileScreen = () => {
     const { userId } = useParams();
     const { user: currentUser } = useAuth();
-    const navigate = useNavigate();
+    const { users } = useData();
 
     // If userId is present, we are viewing someone else's profile.
     // Otherwise, it's the current user's own profile.
-    const profileUser = userId ? Object.values(mockUsers).find(u => u.id === userId) : currentUser;
-
+    const profileUser = userId ? users.find(u => u.id === userId) : currentUser;
 
     if (!profileUser) {
         return (
@@ -1660,59 +2059,196 @@ const ProfileScreen = () => {
     );
 };
 
+const WalletScreen = () => {
+    const { user } = useAuth();
+    const { transactions, updateUser, addTransaction } = useData();
+    const { notify } = useNotifier();
+    
+    if (!user) return null;
+
+    const userTransactions = transactions.filter(t => t.userId === user.id);
+
+    const handleAddFunds = () => {
+        const amountStr = window.prompt("Enter amount to add:", "1000");
+        if (amountStr) {
+            const amount = parseFloat(amountStr);
+            if (!isNaN(amount) && amount > 0) {
+                const updatedUser = { ...user, walletBalance: user.walletBalance + amount };
+                updateUser(updatedUser);
+                addTransaction({
+                    id: `txn-${Date.now()}`,
+                    userId: user.id,
+                    date: new Date().toISOString(),
+                    type: TransactionType.DEPOSIT,
+                    amount: amount,
+                    description: "M-Pesa Top-up",
+                });
+                notify(`KES ${amount.toLocaleString()} added to your wallet.`, "success");
+            } else {
+                notify("Invalid amount entered.", "error");
+            }
+        }
+    };
+    
+    const handleWithdraw = () => {
+        const amountStr = window.prompt("Enter amount to withdraw:", "500");
+        if (amountStr) {
+            const amount = parseFloat(amountStr);
+            if (!isNaN(amount) && amount > 0) {
+                if (amount > user.walletBalance) {
+                    notify("Insufficient balance for this withdrawal.", "error");
+                    return;
+                }
+                const updatedUser = { ...user, walletBalance: user.walletBalance - amount };
+                updateUser(updatedUser);
+                 addTransaction({
+                    id: `txn-${Date.now()}`,
+                    userId: user.id,
+                    date: new Date().toISOString(),
+                    type: TransactionType.WITHDRAWAL,
+                    amount: -amount,
+                    description: "Bank Withdrawal",
+                });
+                notify(`KES ${amount.toLocaleString()} withdrawn from your wallet.`, "success");
+            } else {
+                notify("Invalid amount entered.", "error");
+            }
+        }
+    };
+
+    const TransactionItem = ({ transaction }: { transaction: Transaction }) => {
+        const isIncome = transaction.amount > 0;
+        return (
+            <li className="flex items-center justify-between py-3">
+                <div className="flex items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${isIncome ? 'bg-green-100' : 'bg-red-100'}`}>
+                        {isIncome ? <PlusIcon className="w-5 h-5 text-green-600"/> : <MinusIcon className="w-5 h-5 text-red-600"/>}
+                    </div>
+                    <div>
+                        <p className="font-semibold text-gray-800">{transaction.description}</p>
+                        <p className="text-sm text-gray-500">{formatDate(transaction.date)}</p>
+                    </div>
+                </div>
+                <p className={`font-semibold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                    {isIncome ? '+' : ''}KES {transaction.amount.toLocaleString()}
+                </p>
+            </li>
+        );
+    };
+
+    const MinusIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+
+    return (
+        <Layout>
+            <Header title="My Wallet" />
+            <div className="p-4 space-y-4">
+                <div className="bg-white rounded-xl shadow-lg p-6 text-center">
+                    <p className="text-gray-500 text-sm">CURRENT BALANCE</p>
+                    <p className="text-4xl font-bold text-gray-800 mt-2">KES {user.walletBalance.toLocaleString()}</p>
+                    <div className="mt-6 grid grid-cols-2 gap-4">
+                        <button 
+                            onClick={handleAddFunds}
+                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                        >
+                            Add Funds
+                        </button>
+                        <button
+                            onClick={handleWithdraw}
+                            className="w-full bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                        >
+                            Withdraw
+                        </button>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-md p-4">
+                    <h3 className="font-bold text-gray-700 mb-2">Transaction History</h3>
+                    {userTransactions.length > 0 ? (
+                        <ul className="divide-y divide-gray-200">
+                            {userTransactions.map(txn => <TransactionItem key={txn.id} transaction={txn} />)}
+                        </ul>
+                    ) : (
+                        <p className="text-center text-gray-500 py-8">No transactions yet.</p>
+                    )}
+                </div>
+            </div>
+        </Layout>
+    );
+}
 
 // --- MAIN APP COMPONENT --- //
 const App = () => {
   return (
-    <AuthProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/login" element={<LoginScreen />} />
-          <Route path="/admin/login" element={<AdminLoginScreen />} />
-          <Route path="/onboarding" element={<OnboardingScreen />} />
-          <Route path="/register/farmer" element={<FarmerRegistrationScreen />} />
-          <Route path="/register/vendor" element={<VendorRegistrationScreen />} />
+    <DataProvider>
+        <AuthProvider>
+        <NotificationProvider>
+            <HashRouter>
+            <Routes>
+                <Route path="/login" element={<LoginScreen />} />
+                <Route path="/admin/login" element={<AdminLoginScreen />} />
+                <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                <Route path="/onboarding" element={<OnboardingScreen />} />
+                <Route path="/register/farmer" element={<FarmerRegistrationScreen />} />
+                <Route path="/register/vendor" element={<VendorRegistrationScreen />} />
 
-          <Route 
-            path="/dashboard" 
-            element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} 
-          />
-           <Route 
-            path="/produce" 
-            element={<ProtectedRoute><ProduceListScreen /></ProtectedRoute>} 
-          />
-           <Route 
-            path="/produce/new" 
-            element={<ProtectedRoute><AddProduceScreen /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/contracts" 
-            element={<ProtectedRoute><ContractsScreen /></ProtectedRoute>} 
-          />
-           <Route 
-            path="/contracts/:contractId" 
-            element={<ProtectedRoute><ContractDetailsScreen /></ProtectedRoute>} 
-          />
-           <Route 
-            path="/contracts/:contractId/track" 
-            element={<ProtectedRoute><MapTrackingScreen /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/produce/:produceId/new-contract" 
-            element={<ProtectedRoute><ContractFormScreen /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/profile" 
-            element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} 
-          />
-           <Route 
-            path="/profile/:userId" 
-            element={<ProtectedRoute><UserProfileScreen /></ProtectedRoute>} 
-          />
-          <Route path="*" element={<Navigate to="/login" />} />
-        </Routes>
-      </HashRouter>
-    </AuthProvider>
+                <Route 
+                path="/dashboard" 
+                element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/produce" 
+                element={<ProtectedRoute><ProduceListScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/produce/new" 
+                element={<ProtectedRoute><AddProduceScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/contracts" 
+                element={<ProtectedRoute><ContractsScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/contracts/:contractId" 
+                element={<ProtectedRoute><ContractDetailsScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/contracts/:contractId/track" 
+                element={<ProtectedRoute><MapTrackingScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/produce/:produceId/new-contract" 
+                element={<ProtectedRoute><ContractFormScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                  path="/wallet"
+                  element={<ProtectedRoute><WalletScreen /></ProtectedRoute>}
+                />
+                <Route 
+                path="/profile" 
+                element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} 
+                />
+                <Route 
+                path="/profile/:userId" 
+                element={<ProtectedRoute><UserProfileScreen /></ProtectedRoute>} 
+                />
+                <Route path="*" element={<Navigate to="/login" />} />
+            </Routes>
+            </HashRouter>
+            <ToastContainer
+            position="top-right"
+            autoClose={5000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+            />
+        </NotificationProvider>
+        </AuthProvider>
+    </DataProvider>
   );
 };
 

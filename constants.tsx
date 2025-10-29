@@ -1,4 +1,4 @@
-import { User, Produce, Contract, UserRole, ContractStatus } from './types';
+import { User, Produce, Contract, UserRole, ContractStatus, Transaction, TransactionType } from './types';
 
 export const mockUsers: { [key: string]: User } = {
   farmer: {
@@ -13,6 +13,7 @@ export const mockUsers: { [key: string]: User } = {
     lat: -0.3031,
     lng: 36.08,
     farmSize: '15 Acres',
+    walletBalance: 18500,
   },
   vendor: {
     id: 'vendor-01',
@@ -26,8 +27,9 @@ export const mockUsers: { [key: string]: User } = {
     lat: -1.2921,
     lng: 36.8219,
     businessName: 'Aisha Fresh Produce',
+    walletBalance: 50000,
   },
-  farmer2: { // Added missing user for mock data consistency
+  farmer2: { 
     id: 'farmer-02',
     name: 'Mary Wanjiru',
     email: 'mary.wanjiru@example.com',
@@ -39,6 +41,7 @@ export const mockUsers: { [key: string]: User } = {
     lat: -0.7167,
     lng: 36.4333,
     farmSize: '10 Acres',
+    walletBalance: 6000,
   },
   admin: {
     id: 'admin-01',
@@ -51,6 +54,7 @@ export const mockUsers: { [key: string]: User } = {
     avatarUrl: 'https://picsum.photos/seed/admin/200',
     lat: -4.0435,
     lng: 39.6682,
+    walletBalance: 0,
   }
 };
 
@@ -64,7 +68,7 @@ export const mockProduce: Produce[] = [
     quantity: 200,
     pricePerKg: 50,
     location: 'Nakuru',
-    imageUrl: 'https://picsum.photos/seed/kale/400/300',
+    imageUrl: 'https://picsum.photos/seed/kale/800/600',
     description: 'Organically grown, ready for harvest.',
     harvestDate: '2024-08-10',
   },
@@ -77,7 +81,7 @@ export const mockProduce: Produce[] = [
     quantity: 500,
     pricePerKg: 120,
     location: 'Nakuru',
-    imageUrl: 'https://picsum.photos/seed/avocado/400/300',
+    imageUrl: 'https://picsum.photos/seed/avocado/800/600',
     description: 'Hass avocados, perfect for export.',
     harvestDate: '2024-08-15',
   },
@@ -90,7 +94,7 @@ export const mockProduce: Produce[] = [
     quantity: 150,
     pricePerKg: 80,
     location: 'Naivasha',
-    imageUrl: 'https://picsum.photos/seed/onions/400/300',
+    imageUrl: 'https://picsum.photos/seed/onions/800/600',
     description: 'High-quality red onions, great for stews.',
     harvestDate: '2024-08-05',
   },
@@ -109,6 +113,10 @@ export const mockContracts: Contract[] = [
     totalPrice: 2500,
     deliveryDeadline: '2024-08-12',
     status: ContractStatus.ACTIVE,
+    statusHistory: [
+      { status: ContractStatus.PENDING, timestamp: '2024-08-10T10:00:00Z' },
+      { status: ContractStatus.ACTIVE, timestamp: '2024-08-10T14:30:00Z' },
+    ],
   },
   {
     id: 'contract-04',
@@ -124,6 +132,12 @@ export const mockContracts: Contract[] = [
     status: ContractStatus.DISPUTED,
     disputeReason: 'Vendor claims the avocados were not ripe upon delivery as promised in the description.',
     disputeFiledBy: 'Aisha Omar',
+    statusHistory: [
+      { status: ContractStatus.PENDING, timestamp: '2024-08-18T09:00:00Z' },
+      { status: ContractStatus.ACTIVE, timestamp: '2024-08-18T11:00:00Z' },
+      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-24T16:00:00Z' },
+      { status: ContractStatus.DISPUTED, timestamp: '2024-08-24T18:00:00Z' },
+    ],
   },
   {
     id: 'contract-02',
@@ -138,6 +152,11 @@ export const mockContracts: Contract[] = [
     deliveryDeadline: '2024-08-20',
     status: ContractStatus.DELIVERY_CONFIRMED,
     paymentDate: '2024-08-22',
+    statusHistory: [
+      { status: ContractStatus.PENDING, timestamp: '2024-08-16T12:00:00Z' },
+      { status: ContractStatus.ACTIVE, timestamp: '2024-08-17T09:00:00Z' },
+      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-20T15:00:00Z' },
+    ],
   },
   {
     id: 'contract-03',
@@ -152,5 +171,47 @@ export const mockContracts: Contract[] = [
     deliveryDeadline: '2024-08-08',
     status: ContractStatus.COMPLETED,
     paymentDate: '2024-08-09',
+    statusHistory: [
+      { status: ContractStatus.PENDING, timestamp: '2024-08-06T08:00:00Z' },
+      { status: ContractStatus.ACTIVE, timestamp: '2024-08-06T13:00:00Z' },
+      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-08T11:00:00Z' },
+      { status: ContractStatus.PAYMENT_RELEASED, timestamp: '2024-08-09T10:00:00Z' },
+      { status: ContractStatus.COMPLETED, timestamp: '2024-08-09T10:00:05Z' },
+    ],
   },
+];
+
+export const mockTransactions: Transaction[] = [
+    {
+        id: 'txn-01',
+        userId: 'vendor-01',
+        date: '2024-08-09T10:00:00Z',
+        type: TransactionType.PAYMENT_SENT,
+        amount: -6000,
+        description: 'Payment for Red Onions',
+    },
+    {
+        id: 'txn-02',
+        userId: 'farmer-02',
+        date: '2024-08-09T10:00:00Z',
+        type: TransactionType.PAYMENT_RECEIVED,
+        amount: 6000,
+        description: 'Payment from Aisha Omar',
+    },
+    {
+        id: 'txn-03',
+        userId: 'vendor-01',
+        date: '2024-08-05T14:00:00Z',
+        type: TransactionType.DEPOSIT,
+        amount: 20000,
+        description: 'M-Pesa Deposit',
+    },
+     {
+        id: 'txn-04',
+        userId: 'farmer-01',
+        date: '2024-08-22T11:00:00Z',
+        type: TransactionType.PAYMENT_RECEIVED,
+        amount: 12000,
+        description: 'Payment from Aisha Omar',
+    },
 ];
