@@ -13,11 +13,11 @@ export interface User {
   reviews: number;
   location: string;
   avatarUrl: string;
+  walletBalance: number;
   lat?: number;
   lng?: number;
   farmSize?: string;
   businessName?: string;
-  walletBalance: number;
 }
 
 export interface Produce {
@@ -44,9 +44,13 @@ export enum ContractStatus {
   CANCELLED = 'Cancelled',
 }
 
-export interface StatusHistory {
-  status: ContractStatus;
-  timestamp: string; // ISO string date
+export interface Logistics {
+  partner: string;
+  status: 'Pending' | 'Scheduled' | 'In Transit' | 'Delivered';
+  pickupTime?: string;
+  deliveryTime?: string;
+  pickupQRCode: string;
+  deliveryQRCode: string;
 }
 
 export interface Contract {
@@ -62,23 +66,34 @@ export interface Contract {
   deliveryDeadline: string;
   paymentDate?: string;
   status: ContractStatus;
-  statusHistory: StatusHistory[];
+  statusHistory: { status: ContractStatus; timestamp: string }[];
   disputeReason?: string;
   disputeFiledBy?: string;
+  logistics?: Logistics;
+}
+
+export interface Message {
+  id: string;
+  contractId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: string;
 }
 
 export enum TransactionType {
-  DEPOSIT = 'Deposit',
-  WITHDRAWAL = 'Withdrawal',
   PAYMENT_SENT = 'Payment Sent',
   PAYMENT_RECEIVED = 'Payment Received',
+  TOP_UP = 'Top-up',
+  WITHDRAWAL = 'Withdrawal',
 }
 
 export interface Transaction {
   id: string;
   userId: string;
-  date: string; // ISO string
   type: TransactionType;
   amount: number;
   description: string;
+  date: string;
+  relatedContractId?: string;
 }

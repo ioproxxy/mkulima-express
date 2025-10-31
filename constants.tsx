@@ -1,7 +1,7 @@
-import { User, Produce, Contract, UserRole, ContractStatus, Transaction, TransactionType } from './types';
+import { User, Produce, Contract, UserRole, ContractStatus, Transaction, TransactionType, Message } from './types';
 
 export const mockUsers: { [key: string]: User } = {
-  farmer: {
+  'farmer-01': {
     id: 'farmer-01',
     name: 'Juma Mwangi',
     email: 'juma.mwangi@example.com',
@@ -10,12 +10,12 @@ export const mockUsers: { [key: string]: User } = {
     reviews: 120,
     location: 'Nakuru, Kenya',
     avatarUrl: 'https://picsum.photos/seed/farmer/200',
+    walletBalance: 15500,
     lat: -0.3031,
     lng: 36.08,
     farmSize: '15 Acres',
-    walletBalance: 18500,
   },
-  vendor: {
+  'vendor-01': {
     id: 'vendor-01',
     name: 'Aisha Omar',
     email: 'aisha.omar@example.com',
@@ -24,12 +24,12 @@ export const mockUsers: { [key: string]: User } = {
     reviews: 85,
     location: 'Nairobi, Kenya',
     avatarUrl: 'https://picsum.photos/seed/vendor/200',
+    walletBalance: 50000,
     lat: -1.2921,
     lng: 36.8219,
     businessName: 'Aisha Fresh Produce',
-    walletBalance: 50000,
   },
-  farmer2: { 
+  'farmer-02': {
     id: 'farmer-02',
     name: 'Mary Wanjiru',
     email: 'mary.wanjiru@example.com',
@@ -38,23 +38,10 @@ export const mockUsers: { [key: string]: User } = {
     reviews: 95,
     location: 'Naivasha, Kenya',
     avatarUrl: 'https://picsum.photos/seed/farmer2/200',
+    walletBalance: 6000,
     lat: -0.7167,
     lng: 36.4333,
     farmSize: '10 Acres',
-    walletBalance: 6000,
-  },
-  admin: {
-    id: 'admin-01',
-    name: 'Admin User',
-    email: 'admin@mkulima.express',
-    role: UserRole.ADMIN,
-    rating: 5.0,
-    reviews: 0,
-    location: 'Mombasa, Kenya',
-    avatarUrl: 'https://picsum.photos/seed/admin/200',
-    lat: -4.0435,
-    lng: 39.6682,
-    walletBalance: 0,
   }
 };
 
@@ -68,7 +55,7 @@ export const mockProduce: Produce[] = [
     quantity: 200,
     pricePerKg: 50,
     location: 'Nakuru',
-    imageUrl: 'https://picsum.photos/seed/kale/800/600',
+    imageUrl: 'https://picsum.photos/seed/kale/400/300',
     description: 'Organically grown, ready for harvest.',
     harvestDate: '2024-08-10',
   },
@@ -81,7 +68,7 @@ export const mockProduce: Produce[] = [
     quantity: 500,
     pricePerKg: 120,
     location: 'Nakuru',
-    imageUrl: 'https://picsum.photos/seed/avocado/800/600',
+    imageUrl: 'https://picsum.photos/seed/avocado/400/300',
     description: 'Hass avocados, perfect for export.',
     harvestDate: '2024-08-15',
   },
@@ -94,7 +81,7 @@ export const mockProduce: Produce[] = [
     quantity: 150,
     pricePerKg: 80,
     location: 'Naivasha',
-    imageUrl: 'https://picsum.photos/seed/onions/800/600',
+    imageUrl: 'https://picsum.photos/seed/onions/400/300',
     description: 'High-quality red onions, great for stews.',
     harvestDate: '2024-08-05',
   },
@@ -114,30 +101,16 @@ export const mockContracts: Contract[] = [
     deliveryDeadline: '2024-08-12',
     status: ContractStatus.ACTIVE,
     statusHistory: [
-      { status: ContractStatus.PENDING, timestamp: '2024-08-10T10:00:00Z' },
-      { status: ContractStatus.ACTIVE, timestamp: '2024-08-10T14:30:00Z' },
+        { status: ContractStatus.PENDING, timestamp: '2024-08-10T10:00:00Z' },
+        { status: ContractStatus.ACTIVE, timestamp: '2024-08-10T11:30:00Z' },
     ],
-  },
-  {
-    id: 'contract-04',
-    produceId: 'prod-002',
-    produceName: 'Ripe Avocados',
-    farmerId: 'farmer-02',
-    vendorId: 'vendor-01',
-    farmerName: 'Mary Wanjiru',
-    vendorName: 'Aisha Omar',
-    quantity: 20,
-    totalPrice: 2400,
-    deliveryDeadline: '2024-08-25',
-    status: ContractStatus.DISPUTED,
-    disputeReason: 'Vendor claims the avocados were not ripe upon delivery as promised in the description.',
-    disputeFiledBy: 'Aisha Omar',
-    statusHistory: [
-      { status: ContractStatus.PENDING, timestamp: '2024-08-18T09:00:00Z' },
-      { status: ContractStatus.ACTIVE, timestamp: '2024-08-18T11:00:00Z' },
-      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-24T16:00:00Z' },
-      { status: ContractStatus.DISPUTED, timestamp: '2024-08-24T18:00:00Z' },
-    ],
+    logistics: {
+        partner: 'Kobo Logistics',
+        status: 'Scheduled',
+        pickupTime: '2024-08-11T09:00:00Z',
+        pickupQRCode: 'MKE-C01-PICKUP',
+        deliveryQRCode: 'MKE-C01-DELIVERY',
+    }
   },
   {
     id: 'contract-02',
@@ -153,10 +126,18 @@ export const mockContracts: Contract[] = [
     status: ContractStatus.DELIVERY_CONFIRMED,
     paymentDate: '2024-08-22',
     statusHistory: [
-      { status: ContractStatus.PENDING, timestamp: '2024-08-16T12:00:00Z' },
-      { status: ContractStatus.ACTIVE, timestamp: '2024-08-17T09:00:00Z' },
-      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-20T15:00:00Z' },
+        { status: ContractStatus.PENDING, timestamp: '2024-08-18T09:00:00Z' },
+        { status: ContractStatus.ACTIVE, timestamp: '2024-08-18T12:00:00Z' },
+        { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-20T16:00:00Z' },
     ],
+    logistics: {
+        partner: 'Sendy',
+        status: 'Delivered',
+        pickupTime: '2024-08-19T10:00:00Z',
+        deliveryTime: '2024-08-20T15:30:00Z',
+        pickupQRCode: 'MKE-C02-PICKUP',
+        deliveryQRCode: 'MKE-C02-DELIVERY',
+    }
   },
   {
     id: 'contract-03',
@@ -172,46 +153,82 @@ export const mockContracts: Contract[] = [
     status: ContractStatus.COMPLETED,
     paymentDate: '2024-08-09',
     statusHistory: [
-      { status: ContractStatus.PENDING, timestamp: '2024-08-06T08:00:00Z' },
-      { status: ContractStatus.ACTIVE, timestamp: '2024-08-06T13:00:00Z' },
-      { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-08T11:00:00Z' },
-      { status: ContractStatus.PAYMENT_RELEASED, timestamp: '2024-08-09T10:00:00Z' },
-      { status: ContractStatus.COMPLETED, timestamp: '2024-08-09T10:00:05Z' },
+        { status: ContractStatus.PENDING, timestamp: '2024-08-06T14:00:00Z' },
+        { status: ContractStatus.ACTIVE, timestamp: '2024-08-06T15:00:00Z' },
+        { status: ContractStatus.DELIVERY_CONFIRMED, timestamp: '2024-08-08T10:00:00Z' },
+        { status: ContractStatus.COMPLETED, timestamp: '2024-08-09T11:00:00Z' },
     ],
+    logistics: {
+        partner: 'Local Transporters',
+        status: 'Delivered',
+        pickupTime: '2024-08-07T11:00:00Z',
+        deliveryTime: '2024-08-08T09:45:00Z',
+        pickupQRCode: 'MKE-C03-PICKUP',
+        deliveryQRCode: 'MKE-C03-DELIVERY',
+    }
   },
 ];
 
+export const mockMessages: Message[] = [
+  {
+    id: 'msg-01',
+    contractId: 'contract-01',
+    senderId: 'vendor-01',
+    senderName: 'Aisha Omar',
+    text: 'Hi Juma, looking forward to the delivery. Please confirm the pickup time.',
+    timestamp: '2024-08-10T11:35:00Z',
+  },
+  {
+    id: 'msg-02',
+    contractId: 'contract-01',
+    senderId: 'farmer-01',
+    senderName: 'Juma Mwangi',
+    text: 'Hello Aisha, the logistics partner will be there tomorrow morning around 9 AM.',
+    timestamp: '2024-08-10T11:40:00Z',
+  },
+  {
+    id: 'msg-03',
+    contractId: 'contract-01',
+    senderId: 'vendor-01',
+    senderName: 'Aisha Omar',
+    text: 'Perfect, thank you!',
+    timestamp: '2024-08-10T11:41:00Z',
+  }
+];
+
 export const mockTransactions: Transaction[] = [
-    {
-        id: 'txn-01',
-        userId: 'vendor-01',
-        date: '2024-08-09T10:00:00Z',
-        type: TransactionType.PAYMENT_SENT,
-        amount: -6000,
-        description: 'Payment for Red Onions',
-    },
-    {
-        id: 'txn-02',
-        userId: 'farmer-02',
-        date: '2024-08-09T10:00:00Z',
-        type: TransactionType.PAYMENT_RECEIVED,
-        amount: 6000,
-        description: 'Payment from Aisha Omar',
-    },
-    {
-        id: 'txn-03',
-        userId: 'vendor-01',
-        date: '2024-08-05T14:00:00Z',
-        type: TransactionType.DEPOSIT,
-        amount: 20000,
-        description: 'M-Pesa Deposit',
-    },
-     {
-        id: 'txn-04',
-        userId: 'farmer-01',
-        date: '2024-08-22T11:00:00Z',
-        type: TransactionType.PAYMENT_RECEIVED,
-        amount: 12000,
-        description: 'Payment from Aisha Omar',
-    },
+  {
+    id: 'txn-001',
+    userId: 'vendor-01',
+    type: TransactionType.PAYMENT_SENT,
+    amount: -6000,
+    description: 'Payment for Red Onions',
+    date: '2024-08-09',
+    relatedContractId: 'contract-03',
+  },
+  {
+    id: 'txn-002',
+    userId: 'farmer-02',
+    type: TransactionType.PAYMENT_RECEIVED,
+    amount: 6000,
+    description: 'Received payment for Red Onions',
+    date: '2024-08-09',
+    relatedContractId: 'contract-03',
+  },
+  {
+    id: 'txn-003',
+    userId: 'vendor-01',
+    type: TransactionType.TOP_UP,
+    amount: 20000,
+    description: 'Wallet Top-up',
+    date: '2024-08-01',
+  },
+  {
+    id: 'txn-004',
+    userId: 'farmer-01',
+    type: TransactionType.TOP_UP,
+    amount: 5000,
+    description: 'Wallet Top-up',
+    date: '2024-08-02',
+  },
 ];

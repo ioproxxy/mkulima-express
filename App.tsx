@@ -1,10 +1,9 @@
 
-
-import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
+import React, { useState, useContext, createContext, useMemo, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
-import { User, UserRole, Produce, Contract, ContractStatus, Transaction, TransactionType } from './types';
-import { mockUsers, mockProduce, mockContracts, mockTransactions } from './constants';
+import { User, UserRole, Produce, Contract, ContractStatus, Transaction, TransactionType, Message, Logistics } from './types';
+import { mockUsers, mockProduce, mockContracts, mockTransactions, mockMessages } from './constants';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -25,6 +24,10 @@ const PlusIcon = ({ className }: { className?: string }) => <svg xmlns="http://w
 const XIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
 const EditIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
 const WalletIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M20 12V8H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg>;
+const MinusIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+const BarChartIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="12" x2="12" y1="20" y2="10" /><line x1="18" x2="18" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="16" /></svg>;
+const MessageSquareIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>;
+const QrCodeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><line x1="14" x2="14.01" y1="14" y2="14"></line><line x1="17" x2="21" y1="14" y2="14"></line><line x1="14" x2="14" y1="17" y2="21"></line><line x1="17" x2="17" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="21" y2="21.01"></line></svg>;
 
 
 // --- DATA CONTEXT --- //
@@ -33,12 +36,14 @@ interface DataContextType {
   produce: Produce[];
   contracts: Contract[];
   transactions: Transaction[];
+  messages: Message[];
   updateUser: (updatedUser: User) => void;
   updateContract: (updatedContract: Contract) => void;
   addContract: (newContract: Contract) => void;
   addProduce: (newProduce: Produce) => void;
   addUser: (newUser: User) => User;
   addTransaction: (newTransaction: Transaction) => void;
+  addMessage: (newMessage: Message) => void;
   setUsers: React.Dispatch<React.SetStateAction<User[]>>;
 }
 
@@ -49,6 +54,8 @@ const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const [contracts, setContracts] = useState<Contract[]>(mockContracts);
   const [produce, setProduce] = useState<Produce[]>(mockProduce);
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+  const [messages, setMessages] = useState<Message[]>(mockMessages);
+
 
   const updateUser = (updatedUser: User) => {
     setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
@@ -75,10 +82,14 @@ const DataProvider = ({ children }: { children: React.ReactNode }) => {
     setTransactions(prev => [newTransaction, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
   };
 
+  const addMessage = (newMessage: Message) => {
+    setMessages(prev => [...prev, newMessage]);
+  };
+
   const value = useMemo(() => ({
-    users, produce, contracts, transactions,
-    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, setUsers
-  }), [users, produce, contracts, transactions]);
+    users, produce, contracts, transactions, messages,
+    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, addMessage, setUsers
+  }), [users, produce, contracts, transactions, messages]);
 
   return (
     <DataContext.Provider value={value}>
@@ -213,6 +224,10 @@ const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
   const handleMakeOffer = () => {
     navigate(`/produce/${produce.id}/new-contract`);
   };
+  
+  const handleCreateContract = () => {
+    navigate(`/my-produce/${produce.id}/new-contract`);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300">
@@ -233,6 +248,14 @@ const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
               className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors"
             >
               Make Offer
+            </button>
+          )}
+           {user?.role === UserRole.FARMER && (
+            <button 
+              onClick={handleCreateContract}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Create Contract
             </button>
           )}
         </div>
@@ -341,6 +364,7 @@ const BottomNav = () => {
     { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
     { path: '/produce', label: 'Produce', icon: LeafIcon },
     { path: '/contracts', label: 'Contracts', icon: FileTextIcon },
+    { path: '/insights', label: 'Insights', icon: BarChartIcon },
   ];
 
   if (user?.role !== UserRole.ADMIN) {
@@ -1074,20 +1098,25 @@ const ProduceListScreen = () => {
     const { produce } = useData();
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
+    if (!user) return null;
+
+    const isFarmer = user.role === UserRole.FARMER;
+    const listTitle = isFarmer ? "My Produce Listings" : "Available Produce";
+    const produceToList = isFarmer ? produce.filter(p => p.farmerId === user.id) : produce;
 
     const filteredProduce = useMemo(() => {
         if (!searchTerm) {
-            return produce;
+            return produceToList;
         }
-        return produce.filter(p =>
+        return produceToList.filter(p =>
             p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             p.type.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [searchTerm, produce]);
+    }, [searchTerm, produceToList]);
 
     return (
         <Layout>
-            <Header title="Available Produce" />
+            <Header title={listTitle} />
             <div className="p-4 pb-24">
                  <div className="relative mb-4">
                     <input
@@ -1111,7 +1140,7 @@ const ProduceListScreen = () => {
                 ) : (
                     <div className="text-center text-gray-500 mt-16">
                         <LeafIcon className="w-16 h-16 mx-auto text-gray-300" />
-                        <p className="mt-4">No produce found for "{searchTerm}".</p>
+                        <p className="mt-4">{searchTerm ? `No produce found for "${searchTerm}".` : (isFarmer ? "You haven't listed any produce yet." : "No produce is currently available.")}</p>
                     </div>
                 )}
             </div>
@@ -1349,6 +1378,7 @@ const ContractFormScreen = () => {
     }
 
     const totalPrice = (parseFloat(quantity) || 0) * currentProduce.pricePerKg;
+    const hasSufficientFunds = user.walletBalance >= totalPrice;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1363,6 +1393,10 @@ const ContractFormScreen = () => {
         }
         if (!deadline) {
             setError('Please select a delivery deadline.');
+            return;
+        }
+        if (!hasSufficientFunds) {
+            notify("You have insufficient funds to make this offer.", "error");
             return;
         }
         
@@ -1431,6 +1465,9 @@ const ContractFormScreen = () => {
                     <div className="p-4 bg-green-50 rounded-lg text-center">
                         <p className="text-gray-600">Total Price</p>
                         <p className="text-2xl font-bold text-green-600">KES {totalPrice.toLocaleString()}</p>
+                        {!hasSufficientFunds && totalPrice > 0 && (
+                            <p className="text-xs text-red-500 mt-1">Insufficient funds. Your balance is KES {user.walletBalance.toLocaleString()}</p>
+                        )}
                     </div>
 
                     {error && <p className="text-sm text-red-600">{error}</p>}
@@ -1445,7 +1482,8 @@ const ContractFormScreen = () => {
                         </button>
                         <button
                             type="submit"
-                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                            disabled={!hasSufficientFunds}
+                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                         >
                             Submit Offer
                         </button>
@@ -1456,9 +1494,205 @@ const ContractFormScreen = () => {
     );
 };
 
+const FarmerContractFormScreen = () => {
+    const { produceId } = useParams();
+    const navigate = useNavigate();
+    const { user } = useAuth();
+    const { produce, users, addContract } = useData();
+    const { notify } = useNotifier();
+
+    const currentProduce = produce.find(p => p.id === produceId);
+    
+    const [vendorId, setVendorId] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [deadline, setDeadline] = useState('');
+    const [error, setError] = useState('');
+
+    if (!currentProduce || !user || user.role !== UserRole.FARMER) {
+        return <Navigate to="/produce" replace />;
+    }
+    
+    const availableVendors = users.filter(u => u.role === UserRole.VENDOR);
+    const totalPrice = (parseFloat(quantity) || 0) * currentProduce.pricePerKg;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const numQuantity = parseFloat(quantity);
+        if (!vendorId) {
+            setError('Please select a vendor.');
+            return;
+        }
+        if (isNaN(numQuantity) || numQuantity <= 0) {
+            setError('Please enter a valid quantity.');
+            return;
+        }
+        if (numQuantity > currentProduce.quantity) {
+            setError(`Quantity cannot exceed available ${currentProduce.quantity} kg.`);
+            return;
+        }
+        if (!deadline) {
+            setError('Please select a delivery deadline.');
+            return;
+        }
+        
+        const selectedVendor = users.find(u => u.id === vendorId);
+        if(!selectedVendor) {
+            setError('Selected vendor not found.');
+            return;
+        }
+        
+        const newContract: Contract = {
+            id: `contract-${Date.now()}`,
+            produceId: currentProduce.id,
+            produceName: currentProduce.name,
+            farmerId: user.id,
+            vendorId: selectedVendor.id,
+            farmerName: user.name,
+            vendorName: selectedVendor.name,
+            quantity: numQuantity,
+            totalPrice: totalPrice,
+            deliveryDeadline: deadline,
+            status: ContractStatus.PENDING,
+            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+        };
+
+        addContract(newContract);
+        notify(`Your contract offer has been sent to ${selectedVendor.name}!`, 'success');
+        navigate('/contracts');
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title="Create New Contract" showBack={true} />
+            <div className="p-4 space-y-4">
+                <div className="bg-white p-4 rounded-lg shadow-md">
+                    <h3 className="text-lg font-bold text-gray-800">{currentProduce.name}</h3>
+                    <p className="text-sm text-gray-500">Available: {currentProduce.quantity} kg at KES {currentProduce.pricePerKg}/kg</p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-md space-y-4">
+                    <div>
+                        <label htmlFor="vendor" className="block text-sm font-medium text-gray-700">Select Vendor</label>
+                        <select
+                            id="vendor"
+                            value={vendorId}
+                            onChange={e => {
+                                setVendorId(e.target.value);
+                                setError('');
+                            }}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                        >
+                            <option value="" disabled>Choose a vendor...</option>
+                            {availableVendors.map(v => (
+                                <option key={v.id} value={v.id}>{v.name} - {v.location}</option>
+                            ))}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label htmlFor="quantity" className="block text-sm font-medium text-gray-700">Quantity (kg)</label>
+                        <input
+                            type="number" id="quantity" value={quantity}
+                            onChange={e => { setQuantity(e.target.value); setError(''); }}
+                            placeholder="e.g., 50" max={currentProduce.quantity}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                        />
+                    </div>
+                    
+                     <div>
+                        <label htmlFor="deadline" className="block text-sm font-medium text-gray-700">Delivery Deadline</label>
+                        <input
+                            type="date" id="deadline" value={deadline}
+                            onChange={e => { setDeadline(e.target.value); setError(''); }}
+                            min={new Date().toISOString().split("T")[0]}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                        />
+                    </div>
+
+                    <div className="p-4 bg-blue-50 rounded-lg text-center">
+                        <p className="text-gray-600">Total Price</p>
+                        <p className="text-2xl font-bold text-blue-600">KES {totalPrice.toLocaleString()}</p>
+                    </div>
+
+                    {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+
+                    <div className="flex space-x-2">
+                         <button type="button" onClick={() => navigate('/produce')} className="w-full bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                            Cancel
+                        </button>
+                        <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                            Send Offer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </Layout>
+    );
+};
+
+
 const formatDate = (isoString: string) => {
     const date = new Date(isoString);
     return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+const ScheduleDeliveryModal = ({ contract, onClose }: { contract: Contract, onClose: () => void }) => {
+    const { updateContract } = useData();
+    const { notify } = useNotifier();
+    const [partner, setPartner] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!partner) {
+            notify('Please select a logistics partner.', 'warning');
+            return;
+        }
+
+        const updatedContract: Contract = {
+            ...contract,
+            logistics: {
+                partner,
+                status: 'Scheduled',
+                pickupTime: new Date().toISOString(),
+                pickupQRCode: `MKE-${contract.id.slice(-4)}-PICKUP`,
+                deliveryQRCode: `MKE-${contract.id.slice(-4)}-DELIVERY`
+            }
+        };
+
+        updateContract(updatedContract);
+        notify('Delivery has been scheduled successfully!', 'success');
+        onClose();
+    };
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-gray-800 text-center">Schedule Delivery</h3>
+                    <p className="text-sm text-center text-gray-500">
+                        Choose a logistics partner to handle the pickup and delivery for this contract.
+                    </p>
+                    <div>
+                        <label htmlFor="partner" className="block text-sm font-medium text-gray-700">Logistics Partner</label>
+                        <select
+                            id="partner" value={partner}
+                            onChange={e => setPartner(e.target.value)}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                        >
+                            <option value="" disabled>Select a partner...</option>
+                            <option value="Kobo Logistics">Kobo Logistics</option>
+                            <option value="Sendy">Sendy</option>
+                            <option value="Lori Systems">Lori Systems</option>
+                            <option value="Local Transporters">Local Transporters</option>
+                        </select>
+                    </div>
+                    <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                        Confirm Schedule
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
 };
 
 const ContractDetailsScreen = () => {
@@ -1468,45 +1702,35 @@ const ContractDetailsScreen = () => {
     const navigate = useNavigate();
     const { notify } = useNotifier();
     
-    const contract = contracts.find(c => c.id === contractId);
+    const contract = useMemo(() => contracts.find(c => c.id === contractId), [contracts, contractId]);
     
-    const [currentContract, setCurrentContract] = useState(contract);
+    const [isScheduling, setIsScheduling] = useState(false);
     const [isEditingDispute, setIsEditingDispute] = useState(false);
-    const [editedDisputeReason, setEditedDisputeReason] = useState(contract?.disputeReason || '');
-    const [editedDisputeFiledBy, setEditedDisputeFiledBy] = useState(contract?.disputeFiledBy || '');
+    const [editedDisputeReason, setEditedDisputeReason] = useState('');
+    const [editedDisputeFiledBy, setEditedDisputeFiledBy] = useState('');
 
-    useEffect(() => {
-        const foundContract = contracts.find(c => c.id === contractId);
-        if (foundContract) {
-            setCurrentContract(foundContract);
-            setEditedDisputeReason(foundContract.disputeReason || '');
-            setEditedDisputeFiledBy(foundContract.disputeFiledBy || '');
-            setIsEditingDispute(false);
-        }
-    }, [contractId, contracts]);
-
-    if (!currentContract || !user) {
+    if (!contract || !user) {
         return <Navigate to="/contracts" replace />;
     }
 
     const sortedStatusHistory = useMemo(() => {
-        return [...(currentContract.statusHistory || [])].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    }, [currentContract.statusHistory]);
+        return [...(contract.statusHistory || [])].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    }, [contract.statusHistory]);
 
-    const currentProduce = produce.find(p => p.id === currentContract.produceId);
-    const farmer = users.find(u => u.id === currentContract.farmerId);
-    const vendor = users.find(u => u.id === currentContract.vendorId);
+    const currentProduce = produce.find(p => p.id === contract.produceId);
+    const farmer = users.find(u => u.id === contract.farmerId);
+    const vendor = users.find(u => u.id === contract.vendorId);
     
     if (!currentProduce || !farmer || !vendor) {
-        return <p>Loading contract details...</p> // Or a proper error component
+        return <p>Loading contract details...</p>; // Or a proper error component
     }
 
     const handleUpdateStatus = (newStatus: ContractStatus) => {
         const newHistoryEntry = { status: newStatus, timestamp: new Date().toISOString() };
         const updatedContract = {
-            ...currentContract,
+            ...contract,
             status: newStatus,
-            statusHistory: [...(currentContract.statusHistory || []), newHistoryEntry]
+            statusHistory: [...(contract.statusHistory || []), newHistoryEntry]
         };
 
         let notificationMessage = '';
@@ -1518,9 +1742,9 @@ const ContractDetailsScreen = () => {
                 notificationType = 'success';
                 break;
             case ContractStatus.CANCELLED:
-                if (currentContract.status === ContractStatus.PENDING) {
+                if (contract.status === ContractStatus.PENDING) {
                     notificationMessage = 'Contract offer declined.';
-                } else if (currentContract.status === ContractStatus.DISPUTED) {
+                } else if (contract.status === ContractStatus.DISPUTED) {
                     notificationMessage = 'Dispute resolved in favor of the vendor. Contract is cancelled.';
                 } else {
                     notificationMessage = 'Contract cancelled.';
@@ -1531,31 +1755,31 @@ const ContractDetailsScreen = () => {
                 notificationType = 'success';
                 break;
             case ContractStatus.COMPLETED:
-                if (currentContract.status === ContractStatus.DELIVERY_CONFIRMED) {
-                    if (vendor.walletBalance < currentContract.totalPrice) {
+                if (contract.status === ContractStatus.DELIVERY_CONFIRMED) {
+                    if (vendor.walletBalance < contract.totalPrice) {
                         notify("Insufficient wallet balance to release payment.", "error");
                         return;
                     }
-                    const updatedVendor = { ...vendor, walletBalance: vendor.walletBalance - currentContract.totalPrice };
-                    const updatedFarmer = { ...farmer, walletBalance: farmer.walletBalance + currentContract.totalPrice };
+                    const updatedVendor = { ...vendor, walletBalance: vendor.walletBalance - contract.totalPrice };
+                    const updatedFarmer = { ...farmer, walletBalance: farmer.walletBalance + contract.totalPrice };
                     updateUser(updatedVendor);
                     updateUser(updatedFarmer);
                     
                     const paymentDate = new Date().toISOString();
                     addTransaction({
                         id: `txn-${Date.now()}-v`, userId: vendor.id, date: paymentDate,
-                        type: TransactionType.PAYMENT_SENT, amount: -currentContract.totalPrice,
-                        description: `Payment for ${currentContract.produceName}`,
+                        type: TransactionType.PAYMENT_SENT, amount: -contract.totalPrice,
+                        description: `Payment for ${contract.produceName}`,
                     });
                     addTransaction({
                         id: `txn-${Date.now()}-f`, userId: farmer.id, date: paymentDate,
-                        type: TransactionType.PAYMENT_RECEIVED, amount: currentContract.totalPrice,
+                        type: TransactionType.PAYMENT_RECEIVED, amount: contract.totalPrice,
                         description: `Payment from ${vendor.name}`,
                     });
 
                     notificationMessage = 'Payment released. Contract is now complete!';
                     updatedContract.paymentDate = new Date().toISOString().split('T')[0];
-                } else if (currentContract.status === ContractStatus.DISPUTED) {
+                } else if (contract.status === ContractStatus.DISPUTED) {
                     notificationMessage = 'Dispute resolved in favor of the farmer. Contract is complete!';
                     updatedContract.paymentDate = new Date().toISOString().split('T')[0];
                 }
@@ -1575,9 +1799,9 @@ const ContractDetailsScreen = () => {
         if (reason && reason.trim()) {
             const newHistoryEntry = { status: ContractStatus.DISPUTED, timestamp: new Date().toISOString() };
             const updatedContract = {
-                ...currentContract,
+                ...contract,
                 status: ContractStatus.DISPUTED,
-                statusHistory: [...(currentContract.statusHistory || []), newHistoryEntry],
+                statusHistory: [...(contract.statusHistory || []), newHistoryEntry],
                 disputeReason: reason.trim(),
                 disputeFiledBy: user.name,
             };
@@ -1587,8 +1811,8 @@ const ContractDetailsScreen = () => {
     };
 
     const handleStartEditDispute = () => {
-        setEditedDisputeReason(currentContract.disputeReason || '');
-        setEditedDisputeFiledBy(currentContract.disputeFiledBy || '');
+        setEditedDisputeReason(contract.disputeReason || '');
+        setEditedDisputeFiledBy(contract.disputeFiledBy || '');
         setIsEditingDispute(true);
     };
 
@@ -1598,7 +1822,7 @@ const ContractDetailsScreen = () => {
             return;
         }
         const updatedContract = {
-            ...currentContract,
+            ...contract,
             disputeReason: editedDisputeReason.trim(),
             disputeFiledBy: editedDisputeFiledBy.trim(),
         };
@@ -1609,12 +1833,12 @@ const ContractDetailsScreen = () => {
 
     const handleCancelEditDispute = () => {
         setIsEditingDispute(false);
-        setEditedDisputeReason(currentContract.disputeReason || '');
-        setEditedDisputeFiledBy(currentContract.disputeFiledBy || '');
+        setEditedDisputeReason(contract.disputeReason || '');
+        setEditedDisputeFiledBy(contract.disputeFiledBy || '');
     };
     
-    const canTrackDelivery = [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED].includes(currentContract.status);
-    const canFileDispute = user.role !== UserRole.ADMIN && [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED].includes(currentContract.status);
+    const canTrackDelivery = contract.logistics && contract.logistics.status !== 'Pending';
+    const canFileDispute = user.role !== UserRole.ADMIN && [ContractStatus.ACTIVE, ContractStatus.DELIVERY_CONFIRMED].includes(contract.status);
 
     const UserDetailCard = ({ user: profileUser }: { user: User }) => (
       <div className="flex items-start justify-between">
@@ -1640,16 +1864,16 @@ const ContractDetailsScreen = () => {
   );
 
     return (
-        <Layout showNav={false}>
+        <Layout showNav={true}>
             <Header title="Contract Details" showBack={true} />
-            <div className="p-4 space-y-4 pb-24">
+            <div className="p-4 space-y-4 pb-40">
                 {/* Produce Info */}
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     <img src={currentProduce.imageUrl} alt={currentProduce.name} className="w-full h-48 object-cover" />
                     <div className="p-4">
                         <div className="flex justify-between items-start">
                             <h3 className="text-lg font-bold text-gray-800 flex-1 pr-2">{currentProduce.name}</h3>
-                            <span className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(currentContract.status)} flex-shrink-0`}>{currentContract.status}</span>
+                            <span className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(contract.status)} flex-shrink-0`}>{contract.status}</span>
                         </div>
                         <div className="mt-4 pt-4 border-t">
                             <h4 className="font-semibold text-gray-700 mb-1">Produce Description</h4>
@@ -1659,7 +1883,7 @@ const ContractDetailsScreen = () => {
                 </div>
 
                  {/* Dispute Info */}
-                {currentContract.status === ContractStatus.DISPUTED && (
+                {contract.status === ContractStatus.DISPUTED && (
                     <div className="bg-white p-4 rounded-lg shadow-md border-l-4 border-orange-500">
                         <div className="flex items-center justify-between mb-2">
                              <div className="flex items-center">
@@ -1703,8 +1927,8 @@ const ContractDetailsScreen = () => {
                             </div>
                         ) : (
                             <>
-                                <p className="text-sm text-gray-500">Filed by: <span className="font-semibold text-gray-700">{currentContract.disputeFiledBy}</span></p>
-                                <p className="mt-2 text-gray-700 italic">"{currentContract.disputeReason}"</p>
+                                <p className="text-sm text-gray-500">Filed by: <span className="font-semibold text-gray-700">{contract.disputeFiledBy}</span></p>
+                                <p className="mt-2 text-gray-700 italic">"{contract.disputeReason}"</p>
                             </>
                         )}
                         
@@ -1725,6 +1949,49 @@ const ContractDetailsScreen = () => {
                         )}
                     </div>
                 )}
+                
+                {/* Logistics Hub */}
+                {contract.status !== ContractStatus.PENDING && contract.status !== ContractStatus.CANCELLED && (
+                    <div className="bg-white p-4 rounded-lg shadow-md">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center">
+                                <TruckIcon className="w-6 h-6 text-gray-700 mr-2" />
+                                <h4 className="font-bold text-gray-800 text-lg">Logistics Hub</h4>
+                            </div>
+                            {!contract.logistics && user.role === UserRole.FARMER && contract.status === ContractStatus.ACTIVE && (
+                                <button onClick={() => setIsScheduling(true)} className="bg-blue-600 text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700">
+                                    Schedule
+                                </button>
+                            )}
+                        </div>
+                        {contract.logistics ? (
+                            <div className="space-y-3 text-sm pt-2 border-t">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Partner:</span>
+                                    <span className="font-semibold text-gray-800">{contract.logistics.partner}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-500">Status:</span>
+                                    <span className="font-semibold text-blue-600">{contract.logistics.status}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                    <div className="text-center bg-gray-50 p-3 rounded-lg">
+                                        <QrCodeIcon className="w-8 h-8 mx-auto text-gray-500"/>
+                                        <p className="text-xs font-semibold text-gray-600 mt-1">Pickup Code</p>
+                                        <p className="font-mono text-xs tracking-wider">{contract.logistics.pickupQRCode}</p>
+                                    </div>
+                                    <div className="text-center bg-gray-50 p-3 rounded-lg">
+                                        <QrCodeIcon className="w-8 h-8 mx-auto text-gray-500"/>
+                                        <p className="text-xs font-semibold text-gray-600 mt-1">Delivery Code</p>
+                                        <p className="font-mono text-xs tracking-wider">{contract.logistics.deliveryQRCode}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-center text-gray-500 pt-2 border-t text-sm">Delivery not yet scheduled.</p>
+                        )}
+                    </div>
+                )}
 
                 {/* Participants */}
                 <div className="bg-white p-4 rounded-lg shadow-md space-y-4">
@@ -1739,20 +2006,20 @@ const ContractDetailsScreen = () => {
                     <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                             <p className="text-gray-500">Quantity</p>
-                            <p className="font-semibold text-base">{currentContract.quantity} kg</p>
+                            <p className="font-semibold text-base">{contract.quantity} kg</p>
                         </div>
                         <div>
                             <p className="text-gray-500">Total Price</p>
-                            <p className="font-semibold text-base">KES {currentContract.totalPrice.toLocaleString()}</p>
+                            <p className="font-semibold text-base">KES {contract.totalPrice.toLocaleString()}</p>
                         </div>
                         <div>
                             <p className="text-gray-500">Delivery Deadline</p>
-                            <p className="font-semibold text-base">{currentContract.deliveryDeadline}</p>
+                            <p className="font-semibold text-base">{contract.deliveryDeadline}</p>
                         </div>
-                         {currentContract.paymentDate && (
+                         {contract.paymentDate && (
                             <div>
                                 <p className="text-gray-500">Payment Date</p>
-                                <p className="font-semibold text-base">{currentContract.paymentDate}</p>
+                                <p className="font-semibold text-base">{contract.paymentDate}</p>
                             </div>
                          )}
                     </div>
@@ -1787,31 +2054,39 @@ const ContractDetailsScreen = () => {
                     </div>
                 </div>
             </div>
+             {isScheduling && <ScheduleDeliveryModal contract={contract} onClose={() => setIsScheduling(false)} />}
+
 
             {/* Action Buttons */}
-            <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-4 border-t flex space-x-2">
-                {user.role === UserRole.FARMER && currentContract.status === ContractStatus.PENDING && (
+            <div className="fixed bottom-16 left-0 right-0 max-w-md mx-auto bg-white p-4 border-t flex space-x-2">
+                {user.role === UserRole.FARMER && contract.status === ContractStatus.PENDING && (
                     <>
                         <button onClick={() => handleUpdateStatus(ContractStatus.CANCELLED)} className="w-full bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600">Decline</button>
                         <button onClick={() => handleUpdateStatus(ContractStatus.ACTIVE)} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">Accept Offer</button>
                     </>
                 )}
-                 {user.role === UserRole.FARMER && currentContract.status === ContractStatus.ACTIVE && (
+                 {user.role === UserRole.FARMER && contract.status === ContractStatus.ACTIVE && (
                     <button onClick={() => handleUpdateStatus(ContractStatus.DELIVERY_CONFIRMED)} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Confirm Delivery</button>
                 )}
-                 {user.role === UserRole.VENDOR && currentContract.status === ContractStatus.DELIVERY_CONFIRMED && (
+                 {user.role === UserRole.VENDOR && contract.status === ContractStatus.DELIVERY_CONFIRMED && (
                     <button onClick={() => handleUpdateStatus(ContractStatus.COMPLETED)} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">Release Payment</button>
                 )}
-                {canTrackDelivery && (
-                    <button onClick={() => navigate(`/contracts/${currentContract.id}/track`)} className="w-full bg-gray-800 text-white py-3 rounded-lg font-semibold hover:bg-gray-900 flex items-center justify-center">
-                        <MapPinIcon className="w-5 h-5 mr-2" />
-                        Track Delivery
+                {canFileDispute && (
+                    <button onClick={handleFileDispute} className="w-1/3 bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 flex items-center justify-center text-sm">
+                        <ShieldAlertIcon className="w-4 h-4 mr-1" />
+                        Dispute
                     </button>
                 )}
-                {canFileDispute && (
-                    <button onClick={handleFileDispute} className="w-full bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 flex items-center justify-center">
-                        <ShieldAlertIcon className="w-5 h-5 mr-2" />
-                        File Dispute
+                {contract.status !== ContractStatus.PENDING && (
+                    <button onClick={() => navigate(`/contracts/${contract.id}/chat`)} className="w-1/3 bg-gray-800 text-white py-3 rounded-lg font-semibold hover:bg-gray-900 flex items-center justify-center text-sm">
+                        <MessageSquareIcon className="w-4 h-4 mr-1" />
+                        Chat
+                    </button>
+                )}
+                {canTrackDelivery && (
+                    <button onClick={() => navigate(`/contracts/${contract.id}/track`)} className="w-1/3 bg-gray-800 text-white py-3 rounded-lg font-semibold hover:bg-gray-900 flex items-center justify-center text-sm">
+                        <MapPinIcon className="w-4 h-4 mr-1" />
+                        Track
                     </button>
                 )}
             </div>
@@ -1823,6 +2098,14 @@ const MapTrackingScreen = () => {
     const { contractId } = useParams();
     const { contracts, users } = useData();
     const contract = contracts.find(c => c.id === contractId);
+    const [progress, setProgress] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setProgress(prev => (prev >= 100 ? 0 : prev + 1));
+        }, 100);
+        return () => clearInterval(interval);
+    }, []);
 
     if (!contract) {
         return <Navigate to="/contracts" replace />;
@@ -1831,70 +2114,57 @@ const MapTrackingScreen = () => {
     const farmer = users.find(u => u.id === contract.farmerId);
     const vendor = users.find(u => u.id === contract.vendorId);
     
-    if (!farmer || !vendor) {
-        return <p>Loading map...</p>;
+    if (!farmer || !vendor || !farmer.lat || !farmer.lng || !vendor.lat || !vendor.lng) {
+        return <p>Location data unavailable for tracking.</p>;
     }
 
-    // Simplified positions for UI mock-up
-    const fromPos = { x: 25, y: 20 }; // e.g., Nakuru
-    const toPos = { x: 75, y: 80 }; // e.g., Nairobi
+    const bounds = { minLat: -5.0, maxLat: 5.0, minLng: 34.0, maxLng: 42.0 };
+    const getPosition = (lat: number, lng: number) => {
+        const x = ((lng - bounds.minLng) / (bounds.maxLng - bounds.minLng)) * 100;
+        const y = ((bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat)) * 100;
+        return { x, y };
+    };
+
+    const farmerPos = getPosition(farmer.lat, farmer.lng);
+    const vendorPos = getPosition(vendor.lat, vendor.lng);
+
+    const truckX = farmerPos.x + (vendorPos.x - farmerPos.x) * (progress / 100);
+    const truckY = farmerPos.y + (vendorPos.y - farmerPos.y) * (progress / 100);
 
     return (
         <Layout showNav={false}>
-            <Header title="Delivery Tracking" showBack={true} />
+            <Header title="Live Delivery Tracking" showBack={true} />
             <div className="p-4 space-y-4">
-                <div className="relative w-full h-80 bg-green-100 rounded-lg shadow-md overflow-hidden">
-                    {/* Simulated Map Background */}
+                <div className="relative w-full h-96 bg-green-100 rounded-lg shadow-md overflow-hidden">
                     <img src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/path-5+f44-0.5(${farmer.lng},${farmer.lat},${vendor.lng},${vendor.lat})/auto/400x300?access_token=pk.eyJ1IjoiZGFuaWVsc2hlYSIsImEiOiJjanl2Z285eWUwZm8wM25udWk0YWM1dHE5In0.kVoL_2Wnx32b3n_84yweJA`} alt="Map of route" className="w-full h-full object-cover opacity-70" />
-
-                     {/* Route Line */}
-                    <svg className="absolute top-0 left-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <line 
-                          x1={fromPos.x} y1={fromPos.y} 
-                          x2={toPos.x} y2={toPos.y} 
-                          stroke="black" strokeWidth="1" strokeDasharray="2,2" />
-                    </svg>
-
-                     {/* Locations */}
-                    <div className="absolute" style={{ left: `${fromPos.x}%`, top: `${fromPos.y}%`, transform: 'translate(-50%, -100%)' }}>
-                        <div className="flex flex-col items-center">
-                            <span className="bg-white px-2 py-1 text-xs rounded shadow-md mb-1">{farmer.location.split(',')[0]}</span>
-                            <MapPinIcon className="w-8 h-8 text-blue-600 drop-shadow-lg" />
-                        </div>
-                    </div>
-                     <div className="absolute" style={{ left: `${toPos.x}%`, top: `${toPos.y}%`, transform: 'translate(-50%, -100%)' }}>
-                         <div className="flex flex-col items-center">
-                             <span className="bg-white px-2 py-1 text-xs rounded shadow-md mb-1">{vendor.location.split(',')[0]}</span>
-                            <MapPinIcon className="w-8 h-8 text-red-600 drop-shadow-lg" />
-                        </div>
+                    
+                    {/* Farmer Pin */}
+                    <div style={{ left: `${farmerPos.x}%`, top: `${farmerPos.y}%`, transform: 'translate(-50%, -100%)' }} className="absolute text-center">
+                        <MapPinIcon className="w-8 h-8 text-green-600" />
+                        <span className="text-xs font-semibold bg-white px-1 rounded">Pickup</span>
                     </div>
 
-                    {/* Truck Icon - Simulating progress */}
-                    <div className="absolute" style={{ left: `${(fromPos.x + toPos.x) / 2}%`, top: `${(fromPos.y + toPos.y) / 2}%`, transform: 'translate(-50%, -50%)' }}>
-                        <TruckIcon className="w-8 h-8 text-gray-800 animate-pulse" />
+                    {/* Vendor Pin */}
+                    <div style={{ left: `${vendorPos.x}%`, top: `${vendorPos.y}%`, transform: 'translate(-50%, -100%)' }} className="absolute text-center">
+                        <MapPinIcon className="w-8 h-8 text-amber-500" />
+                        <span className="text-xs font-semibold bg-white px-1 rounded">Delivery</span>
+                    </div>
+                    
+                    {/* Truck Icon */}
+                    <div style={{ left: `${truckX}%`, top: `${truckY}%`, transform: 'translate(-50%, -50%)' }} className="absolute transition-all duration-100 ease-linear">
+                        <TruckIcon className="w-10 h-10 text-gray-800 bg-white rounded-full p-1 shadow-lg" />
                     </div>
                 </div>
 
                 <div className="bg-white p-4 rounded-lg shadow-md">
-                    <h3 className="font-bold text-gray-800 mb-2">Delivery Details</h3>
+                    <h3 className="font-bold text-gray-800 mb-2">Delivery Status</h3>
                     <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">Produce:</span>
-                            <span className="font-semibold text-gray-800">{contract.produceName}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">From:</span>
-                            <span className="font-semibold text-gray-800">{farmer.location}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">To:</span>
-                            <span className="font-semibold text-gray-800">{vendor.location}</span>
-                        </div>
-                         <hr className="my-2"/>
                         <div className="flex justify-between items-center text-base">
                             <span className="text-gray-500">Live Status:</span>
-                            <span className="font-bold text-green-600">In Transit</span>
+                            <span className="font-bold text-green-600">{contract.logistics?.status || 'In Transit'}</span>
                         </div>
+                         <hr className="my-2"/>
+                        <p className="text-xs text-gray-500 text-center">Simulated real-time tracking from {farmer.location.split(',')[0]} to {vendor.location.split(',')[0]}.</p>
                     </div>
                 </div>
             </div>
@@ -2059,60 +2329,96 @@ const ProfileScreen = () => {
     );
 };
 
+const TransactionModal = ({
+    isOpen,
+    onClose,
+    onSubmit,
+    action,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (amount: number, phone: string) => void;
+    action: 'Top-up' | 'Withdraw';
+}) => {
+    const [amount, setAmount] = useState('');
+    const [phone, setPhone] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    if (!isOpen) return null;
+    
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const numAmount = parseFloat(amount);
+        if (!isNaN(numAmount) && numAmount > 0 && phone.trim()) {
+            setIsProcessing(true);
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            onSubmit(numAmount, phone);
+            setIsProcessing(false);
+            onClose();
+        }
+    };
+    
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <h3 className="text-lg font-bold text-gray-800 text-center">{action} Funds</h3>
+                    <p className="text-sm text-center text-gray-500">
+                      A confirmation will be sent via M-Pesa to complete the transaction.
+                    </p>
+                    <InputField label="Phone Number" name="phone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="0712345678" />
+                    <InputField label="Amount (KES)" name="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="1000" />
+                    <button
+                        type="submit"
+                        disabled={isProcessing}
+                        className={`w-full text-white py-3 rounded-lg font-semibold transition-colors ${action === 'Top-up' ? 'bg-green-600 hover:bg-green-700' : 'bg-amber-500 hover:bg-amber-600'} disabled:bg-gray-400`}
+                    >
+                        {isProcessing ? 'Processing...' : `Confirm ${action}`}
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const WalletScreen = () => {
     const { user } = useAuth();
     const { transactions, updateUser, addTransaction } = useData();
     const { notify } = useNotifier();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalAction, setModalAction] = useState<'Top-up' | 'Withdraw' | null>(null);
     
     if (!user) return null;
 
     const userTransactions = transactions.filter(t => t.userId === user.id);
 
-    const handleAddFunds = () => {
-        const amountStr = window.prompt("Enter amount to add:", "1000");
-        if (amountStr) {
-            const amount = parseFloat(amountStr);
-            if (!isNaN(amount) && amount > 0) {
-                const updatedUser = { ...user, walletBalance: user.walletBalance + amount };
-                updateUser(updatedUser);
-                addTransaction({
-                    id: `txn-${Date.now()}`,
-                    userId: user.id,
-                    date: new Date().toISOString(),
-                    type: TransactionType.DEPOSIT,
-                    amount: amount,
-                    description: "M-Pesa Top-up",
-                });
-                notify(`KES ${amount.toLocaleString()} added to your wallet.`, "success");
-            } else {
-                notify("Invalid amount entered.", "error");
-            }
-        }
+    const handleOpenModal = (action: 'Top-up' | 'Withdraw') => {
+        setModalAction(action);
+        setIsModalOpen(true);
     };
-    
-    const handleWithdraw = () => {
-        const amountStr = window.prompt("Enter amount to withdraw:", "500");
-        if (amountStr) {
-            const amount = parseFloat(amountStr);
-            if (!isNaN(amount) && amount > 0) {
-                if (amount > user.walletBalance) {
-                    notify("Insufficient balance for this withdrawal.", "error");
-                    return;
-                }
-                const updatedUser = { ...user, walletBalance: user.walletBalance - amount };
-                updateUser(updatedUser);
-                 addTransaction({
-                    id: `txn-${Date.now()}`,
-                    userId: user.id,
-                    date: new Date().toISOString(),
-                    type: TransactionType.WITHDRAWAL,
-                    amount: -amount,
-                    description: "Bank Withdrawal",
-                });
-                notify(`KES ${amount.toLocaleString()} withdrawn from your wallet.`, "success");
-            } else {
-                notify("Invalid amount entered.", "error");
+
+    const handleTransactionSubmit = (amount: number, phone: string) => {
+        if (modalAction === 'Top-up') {
+            const updatedUser = { ...user, walletBalance: user.walletBalance + amount };
+            updateUser(updatedUser);
+            addTransaction({
+                id: `txn-${Date.now()}`, userId: user.id, date: new Date().toISOString(),
+                type: TransactionType.TOP_UP, amount: amount, description: "M-Pesa Top-up",
+            });
+            notify(`KES ${amount.toLocaleString()} added to your wallet.`, "success");
+        } else if (modalAction === 'Withdraw') {
+             if (amount > user.walletBalance) {
+                notify("Insufficient balance for this withdrawal.", "error");
+                return;
             }
+            const updatedUser = { ...user, walletBalance: user.walletBalance - amount };
+            updateUser(updatedUser);
+             addTransaction({
+                id: `txn-${Date.now()}`, userId: user.id, date: new Date().toISOString(),
+                type: TransactionType.WITHDRAWAL, amount: -amount, description: "M-Pesa Withdrawal",
+            });
+            notify(`KES ${amount.toLocaleString()} withdrawn from your wallet.`, "success");
         }
     };
 
@@ -2130,13 +2436,11 @@ const WalletScreen = () => {
                     </div>
                 </div>
                 <p className={`font-semibold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                    {isIncome ? '+' : ''}KES {transaction.amount.toLocaleString()}
+                    {isIncome ? '+' : ''}KES {Math.abs(transaction.amount).toLocaleString()}
                 </p>
             </li>
         );
     };
-
-    const MinusIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
 
     return (
         <Layout>
@@ -2147,13 +2451,13 @@ const WalletScreen = () => {
                     <p className="text-4xl font-bold text-gray-800 mt-2">KES {user.walletBalance.toLocaleString()}</p>
                     <div className="mt-6 grid grid-cols-2 gap-4">
                         <button 
-                            onClick={handleAddFunds}
+                            onClick={() => handleOpenModal('Top-up')}
                             className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
                         >
                             Add Funds
                         </button>
                         <button
-                            onClick={handleWithdraw}
+                            onClick={() => handleOpenModal('Withdraw')}
                             className="w-full bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                         >
                             Withdraw
@@ -2172,9 +2476,179 @@ const WalletScreen = () => {
                     )}
                 </div>
             </div>
+            {modalAction && (
+                <TransactionModal
+                    isOpen={isModalOpen}
+                    onClose={() => setIsModalOpen(false)}
+                    onSubmit={handleTransactionSubmit}
+                    action={modalAction}
+                />
+            )}
         </Layout>
     );
-}
+};
+
+const ChatScreen = () => {
+    const { contractId } = useParams();
+    const { user } = useAuth();
+    const { contracts, messages, addMessage } = useData();
+    const [newMessage, setNewMessage] = useState('');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const contract = contracts.find(c => c.id === contractId);
+    
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
+
+    if (!contract || !user) {
+        return <Navigate to="/contracts" />;
+    }
+
+    const contractMessages = messages.filter(m => m.contractId === contractId).sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const otherPartyName = user.id === contract.farmerId ? contract.vendorName : contract.farmerName;
+
+    const handleSendMessage = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newMessage.trim() === '') return;
+
+        const message: Message = {
+            id: `msg-${Date.now()}`,
+            contractId: contract.id,
+            senderId: user.id,
+            senderName: user.name,
+            text: newMessage.trim(),
+            timestamp: new Date().toISOString(),
+        };
+
+        addMessage(message);
+        setNewMessage('');
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title={`Chat with ${otherPartyName}`} showBack />
+            <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 64px)'}}>
+                <div className="flex-grow overflow-y-auto p-4 space-y-4">
+                    {contractMessages.map(msg => {
+                        const isSender = msg.senderId === user.id;
+                        return (
+                            <div key={msg.id} className={`flex ${isSender ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${isSender ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-800'}`}>
+                                    <p className="text-sm">{msg.text}</p>
+                                    <p className={`text-xs mt-1 ${isSender ? 'text-green-100' : 'text-gray-500'} text-right`}>
+                                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                     <div ref={messagesEndRef} />
+                </div>
+                <form onSubmit={handleSendMessage} className="sticky bottom-0 bg-white p-4 border-t flex items-center space-x-2">
+                    <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type a message..."
+                        className="flex-grow px-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <button type="submit" className="bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </form>
+            </div>
+        </Layout>
+    );
+};
+
+const MarketInsightsScreen = () => {
+    const { produce, contracts, users } = useData();
+
+    const priceData = useMemo(() => {
+        const types = [...new Set(produce.map(p => p.type))];
+        return types.map(type => {
+            const items = produce.filter(p => p.type === type);
+            const avgPrice = items.length > 0 ? items.reduce((sum, item) => sum + item.pricePerKg, 0) / items.length : 0;
+            return { type, avgPrice };
+        }).sort((a,b) => b.avgPrice - a.avgPrice);
+    }, [produce]);
+    
+    const maxPrice = Math.max(...priceData.map(d => d.avgPrice), 1); // Avoid division by zero
+
+    const popularityData = useMemo(() => {
+        const counts: { [key: string]: number } = {};
+        contracts.forEach(c => {
+            counts[c.produceName] = (counts[c.produceName] || 0) + 1;
+        });
+        return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 3);
+    }, [contracts]);
+
+    const regionalData = useMemo(() => {
+        const counts: { [key: string]: number } = {};
+        contracts.forEach(c => {
+            const farmer = users.find(u => u.id === c.farmerId);
+            if (farmer) {
+                const region = farmer.location.split(',')[0];
+                counts[region] = (counts[region] || 0) + 1;
+            }
+        });
+        return Object.entries(counts).map(([region, count]) => ({ region, count })).sort((a, b) => b.count - a.count).slice(0, 3);
+    }, [contracts, users]);
+
+    return (
+        <Layout>
+            <Header title="Market Insights" />
+            <div className="p-4 space-y-4">
+                <div className="bg-white rounded-xl shadow-md p-4">
+                    <h3 className="font-bold text-gray-700 mb-2">Average Produce Prices (per kg)</h3>
+                    <div className="space-y-2">
+                        {priceData.map(({ type, avgPrice }) => (
+                            <div key={type} className="flex items-center">
+                                <span className="w-20 text-sm text-gray-600">{type}</span>
+                                <div className="flex-1 bg-gray-200 rounded-full h-4">
+                                    <div 
+                                        className="bg-green-500 h-4 rounded-full text-right pr-2 text-white text-xs flex items-center justify-end"
+                                        style={{ width: `${(avgPrice / maxPrice) * 100}%` }}
+                                    >
+                                        KES {avgPrice.toFixed(0)}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white rounded-xl shadow-md p-4">
+                        <h3 className="font-bold text-gray-700 mb-2">Most Popular</h3>
+                        <ul className="space-y-1 text-sm">
+                            {popularityData.map(({ name, count }, i) => (
+                                <li key={name} className="flex justify-between">
+                                    <span>{i+1}. {name}</span>
+                                    <span className="font-semibold text-gray-600">{count} deals</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                     <div className="bg-white rounded-xl shadow-md p-4">
+                        <h3 className="font-bold text-gray-700 mb-2">Activity Hotspots</h3>
+                        <ul className="space-y-1 text-sm">
+                            {regionalData.map(({ region, count }, i) => (
+                                <li key={region} className="flex justify-between">
+                                    <span>{i+1}. {region}</span>
+                                    <span className="font-semibold text-gray-600">{count} deals</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
 
 // --- MAIN APP COMPONENT --- //
 const App = () => {
@@ -2215,13 +2689,25 @@ const App = () => {
                 path="/contracts/:contractId/track" 
                 element={<ProtectedRoute><MapTrackingScreen /></ProtectedRoute>} 
                 />
+                 <Route 
+                path="/contracts/:contractId/chat" 
+                element={<ProtectedRoute><ChatScreen /></ProtectedRoute>} 
+                />
                 <Route 
                 path="/produce/:produceId/new-contract" 
                 element={<ProtectedRoute><ContractFormScreen /></ProtectedRoute>} 
                 />
                 <Route 
+                path="/my-produce/:produceId/new-contract" 
+                element={<ProtectedRoute><FarmerContractFormScreen /></ProtectedRoute>} 
+                />
+                <Route 
                   path="/wallet"
                   element={<ProtectedRoute><WalletScreen /></ProtectedRoute>}
+                />
+                 <Route 
+                  path="/insights"
+                  element={<ProtectedRoute><MarketInsightsScreen /></ProtectedRoute>}
                 />
                 <Route 
                 path="/profile" 

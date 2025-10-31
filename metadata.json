@@ -1,7 +1,5 @@
 {
   "name": "Copy of Mkulima Express",
   "description": "An escrow-style contract and logistics platform that helps farmers and vendors form trusted, long-term partnerships for selling produce.",
-  "requestFramePermissions": [
-    "geolocation"
-  ]
+  "requestFramePermissions": []
 }
