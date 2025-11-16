@@ -22,7 +22,9 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        // Fix: In an ES module context, `__dirname` is not available.
+        // `path.resolve('.')` is used instead to resolve to the project root directory.
+        '@': path.resolve('.'),
       }
     },
     preview: {

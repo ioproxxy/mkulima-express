@@ -220,9 +220,14 @@ const getStatusColor = (status: ContractStatus) => {
 const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { notify } = useNotifier();
 
   const handleMakeOffer = () => {
-    navigate(`/produce/${produce.id}/new-contract`);
+    if (user?.role === UserRole.VENDOR) {
+      navigate(`/produce/${produce.id}/new-contract`);
+    } else {
+      notify("Only vendors can make offers.", "info");
+    }
   };
   
   const handleCreateContract = () => {
@@ -681,6 +686,10 @@ const AdminLoginScreen = () => {
                         Login
                     </button>
                 </form>
+                 <div className="mt-6 border-t pt-4 text-sm text-gray-500 text-center">
+                    <p><span className="font-medium">Demo Email:</span> admin@mkulima.express</p>
+                    <p className="mt-1 italic">(Any password will work)</p>
+                </div>
                 <div className="mt-6 text-center">
                     <Link to="/login" className="font-semibold text-sm text-green-600 hover:text-green-700">
                        &larr; Back to main site

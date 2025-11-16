@@ -42,6 +42,17 @@ export const mockUsers: { [key: string]: User } = {
     lat: -0.7167,
     lng: 36.4333,
     farmSize: '10 Acres',
+  },
+  'admin-01': {
+    id: 'admin-01',
+    name: 'Admin User',
+    email: 'admin@mkulima.express',
+    role: UserRole.ADMIN,
+    rating: 5.0,
+    reviews: 0,
+    location: 'Platform HQ',
+    avatarUrl: 'https://picsum.photos/seed/admin/200',
+    walletBalance: 0,
   }
 };
 
