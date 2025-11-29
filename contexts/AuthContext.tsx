@@ -1,4 +1,3 @@
-
 // Auth Context with Supabase Integration
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
 import { User, UserRole } from '../types';
@@ -141,14 +140,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
       const authUser = data.user;
       if (!authUser) throw new Error('User not created');
-      const newUser: User = {
-        ...profileData,
+
+      // Whitelist fields that exist in the users table
+      const newUser: Partial<User> = {
         id: authUser.id,
+        name: profileData.name,
+        email: profileData.email,
+        location: profileData.location,
+        role: profileData.role,
         rating: 0,
         reviews: 0,
         walletBalance: 0,
       };
-      const created = await addUser(newUser);
+
+      const created = await addUser(newUser as User);
       setUser(created);
       toast.success('Account created successfully');
     } catch (error: any) {
@@ -161,21 +166,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const registerProfile = async (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        throw new Error('No authenticated user found');
-      }
+      if (!authUser) throw new Error('No authenticated user found');
 
-      const newUser: User = {
-        ...profileData,
+      // Whitelist fields that exist in the users table
+      const newUser: Partial<User> = {
         id: authUser.id,
+        name: profileData.name,
+        email: profileData.email,
+        location: profileData.location,
+        role: profileData.role,
         rating: 0,
         reviews: 0,
-        // avatarUrl removed to avoid missing column errors
         walletBalance: 0,
       };
 
-      const createdUser = await addUser(newUser);
+      const createdUser = await addUser(newUser as User);
       setUser(createdUser);
       toast.success('Profile created successfully!');
     } catch (error: any) {
