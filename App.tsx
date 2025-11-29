@@ -4,7 +4,6 @@ import { ToastContainer, toast, TypeOptions } from 'react-toastify';
 import { User, UserRole, Produce, Contract, ContractStatus } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { useData } from './contexts/DataContext';
-import VerifyOtpScreen from './components/VerifyOtpScreen';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -36,10 +35,115 @@ const Header = ({ title, showBack=false }: { title:string; showBack?:boolean }) 
 // --- Input Field --- //
 const InputField = ({ label, name, type='text', value, onChange, placeholder }: { label:string; name:string; type?:string; value:string; onChange:(e:React.ChangeEvent<HTMLInputElement>)=>void; placeholder?:string }) => (<div><label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label><input id={name} name={name} type={type} value={value} onChange={onChange} placeholder={placeholder} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"/></div>);
 
-// --- Login (OTP) --- //
-const LoginScreen = () => { const navigate=useNavigate(); const location=useLocation(); const { user, login } = useAuth(); const [email,setEmail]=useState(''); const [sending,setSending]=useState(false); const [error,setError]=useState(''); useEffect(()=>{ if(user){ const from=location.state?.from?.pathname || '/dashboard'; navigate(from,{replace:true}); } },[user]); const handleSend=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!email){ setError('Email required'); return;} setSending(true); const ok=await login(email); setSending(false); if(ok) navigate('/verify-otp',{state:{email}}); else setError('Failed to send code'); }; return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-10"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Mkulima Express</h1><p className="text-gray-600 mt-2">Connecting Farmers & Vendors with Trust</p></div><div className="w-full max-w-sm bg-white p-6 rounded-xl shadow-md"><h2 className="text-xl font-semibold text-center mb-4">Login / Sign Up</h2><form onSubmit={handleSend} className="space-y-4"><InputField label="Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/>{error && <p className="text-sm text-red-600 text-center">{error}</p>}<button type="submit" disabled={sending||!email} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{sending? 'Sending...':'Send Code'}</button></form><div className="mt-6 text-center"><p className="text-sm text-gray-600">Administrator? <Link to="/admin/login" className="font-semibold text-green-600">Login here</Link></p></div></div></div>); };
+// --- Login (Email + Password) --- //
+const LoginScreen = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, loginWithPassword } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
-const AdminLoginScreen = () => { const navigate=useNavigate(); const { user, login } = useAuth(); const [email,setEmail]=useState(''); const [sending,setSending]=useState(false); const [error,setError]=useState(''); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const handleSend=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!email){ setError('Email required'); return;} setSending(true); const ok=await login(email); setSending(false); if(ok) navigate('/verify-otp',{state:{email}}); else setError('Failed to send code'); }; return (<div className="min-h-screen flex flex-col items-center justify-center bg-gray-800 p-4"><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg"><h2 className="text-2xl font-semibold text-center text-gray-700 mb-6">Admin Login</h2><form onSubmit={handleSend} className="space-y-4"><InputField label="Admin Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@mkulima.express"/>{error && <p className="text-sm text-red-600 text-center">{error}</p>}<button type="submit" disabled={sending||!email} className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-300">{sending?'Sending...':'Send Code'}</button></form><div className="mt-6 text-center"><Link to="/login" className="font-semibold text-sm text-green-600">&larr; Back</Link></div></div></div>); };
+  useEffect(() => {
+    if (user) {
+      const from = (location.state as any)?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
+    }
+  }, [user]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!email || !password || !role) {
+      setError('Email, password and role are required');
+      return;
+    }
+    setSending(true);
+    const ok = await loginWithPassword(email, password);
+    setSending(false);
+    if (ok) {
+      // After successful login, route based on chosen role shortcut
+      // If the logged in profile is missing, onboarding can still be done via register routes
+      navigate('/dashboard', { replace: true });
+    } else {
+      setError('Invalid credentials');
+    }
+  };
+
+  const goRegister = () => {
+    if (role === UserRole.FARMER) navigate('/register/farmer');
+    else if (role === UserRole.VENDOR) navigate('/register/vendor');
+    else setError('Select a role to sign up');
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4">
+      <div className="text-center mb-10">
+        <LeafIcon className="w-16 h-16 text-green-600 mx-auto" />
+        <h1 className="text-4xl font-bold text-green-800 mt-4">Mkulima Express</h1>
+        <p className="text-gray-600 mt-2">Connecting Farmers & Vendors with Trust</p>
+      </div>
+      <div className="w-full max-w-sm bg-white p-6 rounded-xl shadow-md">
+        <h2 className="text-xl font-semibold text-center mb-4">Login</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setRole(UserRole.FARMER)} className={`w-1/2 py-2 rounded-lg font-semibold ${role===UserRole.FARMER? 'bg-green-600 text-white':'bg-gray-200 text-gray-700'}`}>Farmer</button>
+            <button type="button" onClick={() => setRole(UserRole.VENDOR)} className={`w-1/2 py-2 rounded-lg font-semibold ${role===UserRole.VENDOR? 'bg-amber-500 text-white':'bg-gray-200 text-gray-700'}`}>Vendor</button>
+          </div>
+          <InputField label="Email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+          <InputField label="Password" name="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" />
+          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+          <button type="submit" disabled={sending || !email || !password || !role} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{sending ? 'Logging in...' : 'Login'}</button>
+        </form>
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-600">Don't have an account?</p>
+          <button onClick={goRegister} className="font-semibold text-green-600 mt-1">Sign up as {role? (role===UserRole.FARMER? 'Farmer':'Vendor'):'Farmer/Vendor'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdminLoginScreen = () => {
+  const navigate = useNavigate();
+  const { user, loginWithPassword } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => { if (user) navigate('/dashboard', { replace: true }); }, [user]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!email || !password) { setError('Email and password required'); return; }
+    setSending(true);
+    const ok = await loginWithPassword(email, password);
+    setSending(false);
+    if (ok) navigate('/dashboard', { replace: true });
+    else setError('Invalid credentials');
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-800 p-4">
+      <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg">
+        <h2 className="text-2xl font-semibold text-center text-gray-700 mb-6">Admin Login</h2>
+        <form onSubmit={handleLogin} className="space-y-4">
+          <InputField label="Admin Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@mkulima.express"/>
+          <InputField label="Password" name="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"/>
+          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+          <button type="submit" disabled={sending||!email||!password} className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-300">{sending?'Logging in...':'Login'}</button>
+        </form>
+        <div className="mt-6 text-center">
+          <Link to="/login" className="font-semibold text-sm text-green-600">&larr; Back</Link>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- Onboarding --- //
 const OnboardingScreen = () => { const { user } = useAuth(); const navigate=useNavigate(); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-12"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Join Mkulima Express</h1><p className="text-gray-600 mt-2">Select your role to get started.</p></div><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg space-y-4"><button onClick={()=>navigate('/register/farmer')} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700">Farmer</button><button onClick={()=>navigate('/register/vendor')} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold text-lg hover:bg-amber-600">Vendor</button></div></div>); };
@@ -83,7 +187,6 @@ const App = () => (
       <Routes>
         <Route path="/login" element={<LoginScreen/>} />
         <Route path="/admin/login" element={<AdminLoginScreen/>} />
-        <Route path="/verify-otp" element={<VerifyOtpScreen/>} />
         <Route path="/onboarding" element={<OnboardingScreen/>} />
         <Route path="/register/farmer" element={<FarmerRegistrationScreen/>} />
         <Route path="/register/vendor" element={<VendorRegistrationScreen/>} />
