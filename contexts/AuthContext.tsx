@@ -150,7 +150,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: profileData.role,
         rating: 0,
         reviews: 0,
-        walletBalance: 0,
+        // walletBalance omitted
       };
 
       const created = await addUser(newUser as User);
@@ -177,7 +177,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: profileData.role,
         rating: 0,
         reviews: 0,
-        walletBalance: 0,
+        // walletBalance omitted
       };
 
       const createdUser = await addUser(newUser as User);
