@@ -1,3 +1,4 @@
+
 // Auth Context with Supabase Integration
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
 import { User, UserRole } from '../types';
@@ -145,7 +146,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         id: authUser.id,
         rating: 0,
         reviews: 0,
-        avatarUrl: '',
         walletBalance: 0,
       };
       const created = await addUser(newUser);
@@ -171,7 +171,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         id: authUser.id,
         rating: 0,
         reviews: 0,
-        avatarUrl: '',
+        // avatarUrl removed to avoid missing column errors
         walletBalance: 0,
       };
 
