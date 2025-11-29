@@ -105,8 +105,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(profile);
         return { success: true, needsOnboarding: false };
       } else {
-        // User authenticated but no profile exists - needs onboarding
-        return { success: true, needsOnboarding: true };
+        // Authenticated but no profile exists – auto-create minimal VENDOR profile and continue to dashboard
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) {
+          toast.error('Authenticated user not found');
+          return { success: false, needsOnboarding: false };
+        }
+        const newUser: User = {
+          id: authUser.id,
+          name: email.split('@')[0],
+          email: email.toLowerCase(),
+          role: UserRole.VENDOR,
+          location: '',
+          farmSize: '',
+          businessName: '',
+          rating: 0,
+          reviews: 0,
+          avatarUrl: '',
+          walletBalance: 0,
+        } as User;
+        const created = await addUser(newUser);
+        setUser(created);
+        toast.success('Welcome! Your vendor account has been set up.');
+        return { success: true, needsOnboarding: false };
       }
     } catch (error: any) {
       toast.error('Invalid code: ' + error.message);
