@@ -134,9 +134,27 @@ export const dbOperations = {
   },
   
   async createProduce(produce: any) {
+    // Build payload explicitly to satisfy RLS and snake_case naming.
+    // Do NOT send client-generated id; let DB default generate.
+    const { data: authData } = await supabase.auth.getUser();
+    const authUid = authData?.user?.id;
+
+    const payload = {
+      farmer_id: authUid, // must match auth.uid() for RLS
+      farmer_name: produce.farmerName,
+      name: produce.name,
+      type: produce.type,
+      quantity: produce.quantity,
+      price_per_kg: produce.pricePerKg,
+      location: produce.location,
+      image_url: produce.imageUrl || '',
+      description: produce.description,
+      harvest_date: produce.harvestDate,
+    };
+
     const { data, error } = await supabase
       .from('produce')
-      .insert(toSnakeCase(produce))
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;

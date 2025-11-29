@@ -9,29 +9,31 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  rating: number;
-  reviews: number;
   location: string;
-  avatarUrl: string;
-  walletBalance: number;
   lat?: number;
   lng?: number;
-  farmSize?: string;
-  businessName?: string;
+  rating: number;
+  reviews: number;
+  avatarUrl: string; // maps to avatar_url
+  walletBalance: number; // maps to wallet_balance
+  farmSize?: string; // maps to farm_size
+  businessName?: string; // maps to business_name
+  createdAt?: string; // maps to created_at
 }
 
 export interface Produce {
   id: string;
-  farmerId: string;
+  farmerId: string; // maps to farmer_id
   farmerName: string;
   name: string;
   type: string;
   quantity: number; // in kg
-  pricePerKg: number;
+  pricePerKg: number; // maps to price_per_kg
   location: string;
-  imageUrl: string;
+  imageUrl: string; // maps to image_url
   description: string;
-  harvestDate: string;
+  harvestDate: string; // maps to harvest_date
+  createdAt?: string; // maps to created_at
 }
 
 export enum ContractStatus {
@@ -44,18 +46,9 @@ export enum ContractStatus {
   CANCELLED = 'Cancelled',
 }
 
-export interface Logistics {
-  partner: string;
-  status: 'Pending' | 'Scheduled' | 'In Transit' | 'Delivered';
-  pickupTime?: string;
-  deliveryTime?: string;
-  pickupQRCode: string;
-  deliveryQRCode: string;
-}
-
 export interface Contract {
   id: string;
-  produceId: string;
+  produceId?: string; // optional, aligns with produce_id in other tables
   produceName: string;
   farmerId: string;
   vendorId: string;
@@ -66,10 +59,7 @@ export interface Contract {
   deliveryDeadline: string;
   paymentDate?: string;
   status: ContractStatus;
-  statusHistory: { status: ContractStatus; timestamp: string }[];
-  disputeReason?: string;
-  disputeFiledBy?: string;
-  logistics?: Logistics;
+  createdAt?: string; // maps to created_at
 }
 
 export interface Message {
@@ -81,19 +71,71 @@ export interface Message {
   timestamp: string;
 }
 
-export enum TransactionType {
-  PAYMENT_SENT = 'Payment Sent',
-  PAYMENT_RECEIVED = 'Payment Received',
-  TOP_UP = 'Top-up',
-  WITHDRAWAL = 'Withdrawal',
+export enum TransactionDirection {
+  DEBIT = 'DEBIT',
+  CREDIT = 'CREDIT',
 }
 
 export interface Transaction {
   id: string;
-  userId: string;
-  type: TransactionType;
+  userId: string; // maps to user_id
   amount: number;
-  description: string;
+  type: TransactionDirection; // backend uses DEBIT/CREDIT
   date: string;
+  description: string;
   relatedContractId?: string;
+  createdAt?: string; // maps to created_at
+}
+
+// Optional: tables that exist in backend but not yet used in views
+export interface Dispute {
+  id: string;
+  contractId: string;
+  filedBy: string; // user id
+  reason: string;
+  status: string;
+  resolution?: string;
+  createdAt?: string;
+}
+
+export interface Delivery {
+  id: string;
+  contractId: string;
+  orderId?: string;
+  driverId?: string;
+  status: string;
+  currentLocation?: string;
+  eta?: string;
+  createdAt?: string;
+}
+
+export interface Order {
+  id: string;
+  buyerId: string;
+  sellerId: string;
+  produceId: string;
+  quantity: number;
+  totalPrice: number;
+  status: string;
+  createdAt?: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  title: string;
+  body: string;
+  seen: boolean;
+  createdAt?: string;
+}
+
+export interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  direction: TransactionDirection; // DEBIT/CREDIT
+  method: string;
+  relatedOrderId?: string;
+  relatedContractId?: string;
+  createdAt?: string;
 }
