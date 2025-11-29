@@ -4,14 +4,22 @@ import { User, UserRole } from '../types';
 import { sendOTP, verifyOTP, signOut, initAuthSession, subscribeToAuthChanges } from '../supabaseHelpers';
 import { useData } from './DataContext';
 import { toast } from 'react-toastify';
+import { supabase } from '../supabaseClient';
 
 interface AuthContextType {
   user: User | null;
   loadingAuth: boolean;
-  login: (email: string) => Promise<boolean>;
-  logout: () => Promise<void>;
+  // OTP based
+  login: (email: string) => Promise<boolean>; // send OTP
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; needsOnboarding: boolean }>;
+
+  // Password based
+  loginWithPassword: (email: string, password: string) => Promise<boolean>;
+  registerWithPassword: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>, password: string) => Promise<void>;
+
+  // Legacy profile creation (after OTP flow)
   registerProfile: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -68,8 +76,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(updatedUser);
       }
     }
-  }, [users]);
+  }, [users, user]);
 
+  // OTP Login (request code)
   const login = async (email: string): Promise<boolean> => {
     try {
       await sendOTP(email);
@@ -81,6 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  // Verify OTP
   const verifyCode = async (email: string, code: string): Promise<{ success: boolean; needsOnboarding: boolean }> => {
     try {
       const { profile } = await verifyOTP(email, code);
@@ -98,20 +108,59 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const logout = async () => {
+  // Password login
+  const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
     try {
-      await signOut();
-      setUser(null);
-      toast.info('Logged out successfully');
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data.session) {
+        toast.error('Login failed');
+        return false;
+      }
+      const profile = await initAuthSession();
+      if (profile) {
+        setUser(profile);
+      } else {
+        toast.info('Complete your profile');
+      }
+      return true;
     } catch (error: any) {
-      toast.error('Logout failed: ' + error.message);
+      toast.error(error.message || 'Password login failed');
+      return false;
     }
   };
 
+  // Password-based registration (sign up + create profile row)
+  const registerWithPassword = async (
+    profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>,
+    password: string
+  ) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({ email: profileData.email, password });
+      if (error) throw error;
+      const authUser = data.user;
+      if (!authUser) throw new Error('User not created');
+      const newUser: User = {
+        ...profileData,
+        id: authUser.id,
+        rating: 0,
+        reviews: 0,
+        avatarUrl: '',
+        walletBalance: 0,
+      };
+      const created = await addUser(newUser);
+      setUser(created);
+      toast.success('Account created successfully');
+    } catch (error: any) {
+      toast.error('Registration failed: ' + error.message);
+      throw error;
+    }
+  };
+
+  // Legacy profile creation after OTP auth
   const registerProfile = async (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => {
     try {
-      // Get current auth user ID
-      const { data: { user: authUser } } = await import('../supabaseClient').then(m => m.supabase.auth.getUser());
+      const { data: { user: authUser } } = await supabase.auth.getUser();
       
       if (!authUser) {
         throw new Error('No authenticated user found');
@@ -119,10 +168,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const newUser: User = {
         ...profileData,
-        id: authUser.id, // Use Supabase auth user ID
+        id: authUser.id,
         rating: 0,
         reviews: 0,
-        avatarUrl: `https://picsum.photos/seed/${authUser.id}/200`,
+        avatarUrl: '',
         walletBalance: 0,
       };
 
@@ -135,13 +184,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const logout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      toast.info('Logged out successfully');
+    } catch (error: any) {
+      toast.error('Logout failed: ' + error.message);
+    }
+  };
+
   const value = useMemo(() => ({
     user,
     loadingAuth,
     login,
-    logout,
     verifyCode,
+    loginWithPassword,
+    registerWithPassword,
     registerProfile,
+    logout,
   }), [user, loadingAuth]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

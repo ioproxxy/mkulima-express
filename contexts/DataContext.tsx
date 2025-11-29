@@ -1,6 +1,6 @@
 // Data Context with Supabase Integration
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
-import { User, Produce, Contract, Transaction, Message } from './types';
+import { User, Produce, Contract, Transaction, Message } from '../types';
 import { dbOperations, subscribeToMessages } from './supabaseHelpers';
 import { toast } from 'react-toastify';
 
