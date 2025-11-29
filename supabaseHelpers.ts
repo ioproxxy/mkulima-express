@@ -102,9 +102,32 @@ export const dbOperations = {
   },
   
   async createUser(user: any) {
+    // Ensure RLS passes: id must equal auth.uid()
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) throw authErr;
+    const authUser = authData?.user;
+    if (!authUser) throw new Error('Not authenticated. Please log in first.');
+
+    // Build safe payload explicitly mapping known columns and ensuring required NOT NULL fields
+    const payload: any = {
+      id: authUser.id,
+      email: (user.email || authUser.email || '').toLowerCase(),
+      name: user.name || (authUser.email?.split('@')[0] || 'User'),
+      role: user.role, // must be FARMER | VENDOR | ADMIN
+      location: user.location ?? '',
+      farm_size: user.farmSize ?? null,
+      business_name: user.businessName ?? null,
+      rating: user.rating ?? 0,
+      reviews: user.reviews ?? 0,
+      avatar_url: user.avatarUrl ?? '',
+      wallet_balance: user.walletBalance ?? 0,
+      lat: user.lat ?? null,
+      lng: user.lng ?? null,
+    };
+
     const { data, error } = await supabase
       .from('users')
-      .insert(toSnakeCase(user))
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;
