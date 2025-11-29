@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
 import { User, UserRole, Produce, Contract, ContractStatus } from './types';
-import { useAuth } from './contexts/AuthContext';
-import { useData } from './contexts/DataContext';
+import { useAuth, AuthProvider } from './contexts/AuthContext';
+import { useData, DataProvider } from './contexts/DataContext';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -42,6 +42,7 @@ const LoginScreen = () => {
   const { user, loginWithPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<UserRole|undefined>();
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,9 +58,12 @@ const LoginScreen = () => {
     setError('');
     if (!email || !password) { setError('Email and password are required'); return; }
     setSending(true);
-    const { success } = await loginWithPassword(email, password);
+    const { success, createdMinimal } = await loginWithPassword(email, password, selectedRole);
     setSending(false);
-    if (success) navigate('/dashboard', { replace: true }); else setError('Invalid credentials');
+    if (!success) { setError('Invalid credentials'); return; }
+    if (createdMinimal) navigate('/dashboard', { replace: true });
+    else if (!user) navigate('/onboarding', { replace: true });
+    else navigate('/dashboard', { replace: true });
   };
 
   return (
@@ -74,6 +78,10 @@ const LoginScreen = () => {
         <form onSubmit={handleLogin} className="space-y-4">
           <InputField label="Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/>
           <InputField label="Password" name="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"/>
+          <div className="flex justify-center gap-2 text-xs">
+            <button type="button" onClick={()=>setSelectedRole(UserRole.FARMER)} className={`px-2 py-1 rounded ${selectedRole===UserRole.FARMER? 'bg-green-600 text-white':'bg-gray-200 text-gray-700'}`}>Farmer</button>
+            <button type="button" onClick={()=>setSelectedRole(UserRole.VENDOR)} className={`px-2 py-1 rounded ${selectedRole===UserRole.VENDOR? 'bg-amber-500 text-white':'bg-gray-200 text-gray-700'}`}>Vendor</button>
+          </div>
           {error && <p className="text-sm text-red-600 text-center">{error}</p>}
           <button type="submit" disabled={sending||!email||!password} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{sending? 'Logging in...':'Login'}</button>
         </form>
@@ -94,8 +102,8 @@ const LoginScreen = () => {
 const OnboardingScreen = () => { const { user } = useAuth(); const navigate=useNavigate(); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-12"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Join Mkulima Express</h1><p className="text-gray-600 mt-2">Select your role to get started.</p></div><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg space-y-4"><button onClick={()=>navigate('/register/farmer')} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700">Farmer</button><button onClick={()=>navigate('/register/vendor')} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold text-lg hover:bg-amber-600">Vendor</button></div></div>); };
 
 // --- Registration (MINIMAL) --- //
-const FarmerRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving(true); try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.FARMER }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Farmer Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
-const VendorRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving=true; try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.VENDOR }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Vendor Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
+const FarmerRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); const { notify } = useNotifier(); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving(true); try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.FARMER }, form.password); notify('Account created. Check email to confirm then login.','info'); navigate('/login',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Farmer Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
+const VendorRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); const { notify } = useNotifier(); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving(true); try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.VENDOR }, form.password); notify('Account created. Check email to confirm then login.','info'); navigate('/login',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Vendor Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
 
 // --- Produce Listing --- //
 const ProduceCard: React.FC<{ produce:Produce }> = ({ produce }) => { const { user } = useAuth(); const navigate=useNavigate(); const { notify } = useNotifier(); const offer=()=>{ if(user?.role===UserRole.VENDOR) navigate(`/produce/${produce.id}/new-contract`); else notify('Only vendors can make offers','info'); }; const farmerCreate=()=> navigate(`/my-produce/${produce.id}/new-contract`); return (<div className="bg-white rounded-lg shadow-md overflow-hidden"><img src={produce.imageUrl} alt={produce.name} className="w-full h-48 object-cover"/><div className="p-4"><h3 className="text-lg font-bold text-gray-800">{produce.name}</h3><p className="text-sm text-gray-500">{produce.type}</p><div className="mt-2 text-sm text-gray-700"><p>By: <span className="font-semibold">{produce.farmerName}</span></p><p>Location: <span className="font-semibold">{produce.location}</span></p><p>Quantity: <span className="font-semibold">{produce.quantity} kg</span></p></div><div className="mt-4 flex justify-between items-center"><p className="text-lg font-bold text-green-600">KES {produce.pricePerKg}<span className="text-sm text-gray-500">/kg</span></p>{user?.role===UserRole.VENDOR && <button onClick={offer} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Make Offer</button>}{user?.role===UserRole.FARMER && <button onClick={farmerCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Create Contract</button>}</div></div></div>); };
@@ -128,23 +136,27 @@ const MarketInsightsScreen = () => <Layout><Header title="Market Insights"/><div
 // --- App --- //
 const App = () => (
   <NotificationProvider>
-    <HashRouter>
-      <Routes>
-        <Route path="/login" element={<LoginScreen/>} />
-        <Route path="/onboarding" element={<OnboardingScreen/>} />
-        <Route path="/register/farmer" element={<FarmerRegistrationScreen/>} />
-        <Route path="/register/vendor" element={<VendorRegistrationScreen/>} />
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen/></ProtectedRoute>} />
-        <Route path="/produce" element={<ProtectedRoute><ProduceListScreen/></ProtectedRoute>} />
-        <Route path="/produce/new" element={<ProtectedRoute><AddProduceScreen/></ProtectedRoute>} />
-        <Route path="/contracts" element={<ProtectedRoute><ContractsScreen/></ProtectedRoute>} />
-        <Route path="/wallet" element={<ProtectedRoute><WalletScreen/></ProtectedRoute>} />
-        <Route path="/insights" element={<ProtectedRoute><MarketInsightsScreen/></ProtectedRoute>} />
-        <Route path="/profile" element={<ProtectedRoute><ProfileScreen/></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/login"/>} />
-      </Routes>
-    </HashRouter>
-    <ToastContainer position="top-right" autoClose={5000} />
+    <DataProvider>
+      <AuthProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="/login" element={<LoginScreen/>} />
+            <Route path="/onboarding" element={<OnboardingScreen/>} />
+            <Route path="/register/farmer" element={<FarmerRegistrationScreen/>} />
+            <Route path="/register/vendor" element={<VendorRegistrationScreen/>} />
+            <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen/></ProtectedRoute>} />
+            <Route path="/produce" element={<ProtectedRoute><ProduceListScreen/></ProtectedRoute>} />
+            <Route path="/produce/new" element={<ProtectedRoute><AddProduceScreen/></ProtectedRoute>} />
+            <Route path="/contracts" element={<ProtectedRoute><ContractsScreen/></ProtectedRoute>} />
+            <Route path="/wallet" element={<ProtectedRoute><WalletScreen/></ProtectedRoute>} />
+            <Route path="/insights" element={<ProtectedRoute><MarketInsightsScreen/></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfileScreen/></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/login"/>} />
+          </Routes>
+        </HashRouter>
+        <ToastContainer position="top-right" autoClose={5000} />
+      </AuthProvider>
+    </DataProvider>
   </NotificationProvider>
 );
 
