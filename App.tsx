@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
 import { User, UserRole, Produce, Contract, ContractStatus } from './types';
-import { useAuth, AuthProvider } from './contexts/AuthContext';
-import { useData, DataProvider } from './contexts/DataContext';
+import { useAuth } from './contexts/AuthContext';
+import { useData } from './contexts/DataContext';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -136,27 +136,23 @@ const MarketInsightsScreen = () => <Layout><Header title="Market Insights"/><div
 // --- App --- //
 const App = () => (
   <NotificationProvider>
-    <DataProvider>
-      <AuthProvider>
-        <HashRouter>
-          <Routes>
-            <Route path="/login" element={<LoginScreen/>} />
-            <Route path="/onboarding" element={<OnboardingScreen/>} />
-            <Route path="/register/farmer" element={<FarmerRegistrationScreen/>} />
-            <Route path="/register/vendor" element={<VendorRegistrationScreen/>} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen/></ProtectedRoute>} />
-            <Route path="/produce" element={<ProtectedRoute><ProduceListScreen/></ProtectedRoute>} />
-            <Route path="/produce/new" element={<ProtectedRoute><AddProduceScreen/></ProtectedRoute>} />
-            <Route path="/contracts" element={<ProtectedRoute><ContractsScreen/></ProtectedRoute>} />
-            <Route path="/wallet" element={<ProtectedRoute><WalletScreen/></ProtectedRoute>} />
-            <Route path="/insights" element={<ProtectedRoute><MarketInsightsScreen/></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfileScreen/></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/login"/>} />
-          </Routes>
-        </HashRouter>
-        <ToastContainer position="top-right" autoClose={5000} />
-      </AuthProvider>
-    </DataProvider>
+    <HashRouter>
+      <Routes>
+        <Route path="/login" element={<LoginScreen/>} />
+        <Route path="/onboarding" element={<OnboardingScreen/>} />
+        <Route path="/register/farmer" element={<FarmerRegistrationScreen/>} />
+        <Route path="/register/vendor" element={<VendorRegistrationScreen/>} />
+        <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen/></ProtectedRoute>} />
+        <Route path="/produce" element={<ProtectedRoute><ProduceListScreen/></ProtectedRoute>} />
+        <Route path="/produce/new" element={<ProtectedRoute><AddProduceScreen/></ProtectedRoute>} />
+        <Route path="/contracts" element={<ProtectedRoute><ContractsScreen/></ProtectedRoute>} />
+        <Route path="/wallet" element={<ProtectedRoute><WalletScreen/></ProtectedRoute>} />
+        <Route path="/insights" element={<ProtectedRoute><MarketInsightsScreen/></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfileScreen/></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/login"/>} />
+      </Routes>
+    </HashRouter>
+    <ToastContainer position="top-right" autoClose={5000} />
   </NotificationProvider>
 );
 
