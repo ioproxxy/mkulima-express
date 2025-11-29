@@ -35,7 +35,7 @@ const Header = ({ title, showBack=false }: { title:string; showBack?:boolean }) 
 // --- Input Field --- //
 const InputField = ({ label, name, type='text', value, onChange, placeholder }: { label:string; name:string; type?:string; value:string; onChange:(e:React.ChangeEvent<HTMLInputElement>)=>void; placeholder?:string }) => (<div><label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label><input id={name} name={name} type={type} value={value} onChange={onChange} placeholder={placeholder} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"/></div>);
 
-// --- Login (Email + Password) --- //
+// --- Login --- //
 const LoginScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,85 +55,17 @@ const LoginScreen = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) {
-      setError('Email and password are required');
-      return;
-    }
+    if (!email || !password) { setError('Email and password are required'); return; }
     setSending(true);
     const { success } = await loginWithPassword(email, password);
-    setSending(false);
-    if (success) {
-      navigate('/dashboard', { replace: true });
-    } else {
-      setError('Invalid credentials');
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4">
-      <div className="text-center mb-10">
-        <LeafIcon className="w-16 h-16 text-green-600 mx-auto" />
-        <h1 className="text-4xl font-bold text-green-800 mt-4">Mkulima Express</h1>
-        <p className="text-gray-600 mt-2">Connecting Farmers & Vendors with Trust</p>
-      </div>
-      <div className="w-full max-w-sm bg-white p-6 rounded-xl shadow-md">
-        <h2 className="text-xl font-semibold text-center mb-4">Login</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <InputField label="Email" name="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
-          <InputField label="Password" name="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Your password" />
-          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-          <button type="submit" disabled={sending || !email || !password} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{sending ? 'Logging in...' : 'Login'}</button>
-        </form>
-        <div className="mt-6 text-center space-y-2">
-          <p className="text-sm text-gray-600">Don't have an account?</p>
-          <div className="flex justify-center gap-4">
-            <Link to="/register/farmer" className="font-semibold text-green-600">Register Farmer</Link>
-            <Link to="/register/vendor" className="font-semibold text-amber-600">Register Vendor</Link>
-          </div>
-          <Link to="/admin/login" className="block text-xs text-gray-500 mt-2">Admin Login</Link>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AdminLoginScreen = () => {
-  const navigate = useNavigate();
-  const { user, loginWithPassword } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => { if (user) navigate('/dashboard', { replace: true }); }, [user]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    if (!email || !password) { setError('Email and password required'); return; }
-    setSending(true);
-    const { success } = await loginWithPassword(email, password, UserRole.ADMIN);
     setSending(false);
     if (success) navigate('/dashboard', { replace: true }); else setError('Invalid credentials');
   };
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-800 p-4">
-      <div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg">
-        <h2 className="text-2xl font-semibold text-center text-gray-700 mb-6">Admin Login</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <InputField label="Admin Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@mkulima.express"/>
-          <InputField label="Password" name="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"/>
-          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-          <button type="submit" disabled={sending||!email||!password} className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-300">{sending?'Logging in...':'Login'}</button>
-        </form>
-        <div className="mt-6 text-center">
-          <Link to="/login" className="font-semibold text-sm text-green-600">&larr; Back</Link>
-        </div>
-      </div>
-    </div>
-  );
+  return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-10"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Mkulima Express</h1><p className="text-gray-600 mt-2">Connecting Farmers & Vendors with Trust</p></div><div className="w-full max-w-sm bg-white p-6 rounded-xl shadow-md"><h2 className="text-xl font-semibold text-center mb-4">Login</h2><form onSubmit={handleLogin} className="space-y-4"><InputField label="Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/><InputField label="Password" name="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"/>{error && <p className="text-sm text-red-600 text-center">{error}</p>}<button type="submit" disabled={sending||!email||!password} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{sending? 'Logging in...':'Login'}</button></form><div className="mt-6 text-center space-y-2"><p className="text-sm text-gray-600">Don't have an account?</p><div className="flex justify-center gap-4"><Link to="/register/farmer" className="font-semibold text-green-600">Register Farmer</Link><Link to="/register/vendor" className="font-semibold text-amber-600">Register Vendor</Link></div><Link to="/admin/login" className="block text-xs text-gray-500 mt-2">Admin Login</Link></div></div></div>);
 };
+
+const AdminLoginScreen = () => { const navigate=useNavigate(); const { user, loginWithPassword } = useAuth(); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [sending,setSending]=useState(false); const [error,setError]=useState(''); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const handleLogin=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!email||!password){ setError('Email and password required'); return;} setSending(true); const { success } = await loginWithPassword(email,password,UserRole.ADMIN); setSending(false); if(success) navigate('/dashboard',{replace:true}); else setError('Invalid credentials'); }; return (<div className="min-h-screen flex flex-col items-center justify-center bg-gray-800 p-4"><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg"><h2 className="text-2xl font-semibold text-center text-gray-700 mb-6">Admin Login</h2><form onSubmit={handleLogin} className="space-y-4"><InputField label="Admin Email" name="email" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@mkulima.express"/><InputField label="Password" name="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Your password"/>{error && <p className="text-sm text-red-600 text-center">{error}</p>}<button type="submit" disabled={sending||!email||!password} className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 disabled:bg-gray-300">{sending? 'Logging in...':'Login'}</button></form><div className="mt-6 text-center"><Link to="/login" className="font-semibold text-sm text-green-600">&larr; Back</Link></div></div></div>); };
 
 // --- Onboarding --- //
 const OnboardingScreen = () => { const { user } = useAuth(); const navigate=useNavigate(); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-12"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Join Mkulima Express</h1><p className="text-gray-600 mt-2">Select your role to get started.</p></div><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg space-y-4"><button onClick={()=>navigate('/register/farmer')} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700">Farmer</button><button onClick={()=>navigate('/register/vendor')} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold text-lg hover:bg-amber-600">Vendor</button></div></div>); };
@@ -156,7 +88,7 @@ const DashboardScreen = () => { const { user } = useAuth(); const { contracts, u
 // --- MapView --- //
 const MapView: React.FC<{ users:User[]; currentUserId?:string }> = ({ users, currentUserId }) => { const bounds={minLat:-5,maxLat:5,minLng:34,maxLng:42}; const pos=(lat:number,lng:number)=>({x:((lng-bounds.minLng)/(bounds.maxLng-bounds.minLng))*100,y:((bounds.maxLat-lat)/(bounds.maxLat-bounds.minLat))*100}); return (<div className="relative w-full h-64 bg-green-100 rounded-lg shadow-md overflow-hidden"><img src={`https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/38,0,3/400x300?access_token=pk.eyJ1IjoiZGFuaWVsc2hlYSIsImEiOiJjanl2Z285eWUwZm8wM25udWk0YWM1dHE5In0.kVoL_2Wnx32b3n_84yweJA`} alt="Map of Kenya" className="w-full h-full object-cover opacity-70"/>{users.map(u=> u.lat&&u.lng? (()=>{ const {x,y}=pos(u.lat,u.lng); return (<div key={u.id} className="absolute group" style={{left:`${x}%`,top:`${y}%`,transform:'translate(-50%,-100%)'}}><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100">{u.name} {u.id===currentUserId && '(You)'}<br/>{u.location && `(${u.location.split(',')[0]})`}</div><LeafIcon className={`w-8 h-8 ${u.id===currentUserId? 'text-blue-500': u.role===UserRole.FARMER? 'text-green-600':'text-amber-500'}`}/></div>); })(): null)}</div>); };
 
-// --- Contracts List --- //
+// --- Contracts --- //
 const ContractsScreen = () => { const { user } = useAuth(); const { contracts } = useData(); const [selected,setSelected]=useState<ContractStatus[]>([]); if(!user) return null; const isFarmer=user.role===UserRole.FARMER; const isAdmin=user.role===UserRole.ADMIN; const list=isAdmin? contracts: contracts.filter(c=> isFarmer? c.farmerId===user.id: c.vendorId===user.id); const toggle=(s:ContractStatus)=> setSelected(prev=> prev.includes(s)? prev.filter(x=>x!==s): [...prev,s]); const filtered=(selected.length? list.filter(c=> selected.includes(c.status)): list).sort((a,b)=> new Date(b.deliveryDeadline).getTime()-new Date(a.deliveryDeadline).getTime()); return (<Layout><Header title="My Contracts"/><div className="p-4"><div className="bg-white p-4 rounded-lg shadow-md mb-4"><div className="flex justify-between items-center mb-2"><h4 className="font-semibold">Filter by Status</h4>{selected.length>0 && <button onClick={()=>setSelected([])} className="text-sm font-semibold text-red-500">Clear</button>}</div><div className="flex flex-wrap gap-2">{Object.values(ContractStatus).map(s=> <button key={s} onClick={()=>toggle(s)} className={`px-3 py-1 text-xs font-semibold rounded-full border-2 ${selected.includes(s)? 'border-green-600 bg-green-100 text-green-800':'border-gray-300 bg-white text-gray-600'}`}>{s}</button>)}</div></div>{filtered.length? filtered.map(c=> <ContractCard key={c.id} contract={c}/> ): <div className="text-center text-gray-500 mt-16"><FileTextIcon className="w-16 h-16 mx-auto text-gray-300"/><p className="mt-4">{list.length? 'No contracts match your filters.':'You have no contracts yet.'}</p></div>}</div></Layout>); };
 
 const ContractCard: React.FC<{ contract:Contract }> = ({ contract }) => { const navigate=useNavigate(); const color=(status:ContractStatus)=>{ switch(status){ case ContractStatus.ACTIVE:return 'text-blue-600 bg-blue-100'; case ContractStatus.COMPLETED:return 'text-green-600 bg-green-100'; case ContractStatus.DELIVERY_CONFIRMED:return 'text-yellow-600 bg-yellow-100'; case ContractStatus.PAYMENT_RELEASED:return 'text-purple-600 bg-purple-100'; case ContractStatus.PENDING:return 'text-gray-600 bg-gray-100'; case ContractStatus.DISPUTED:return 'text-orange-600 bg-orange-100'; default:return 'text-red-600 bg-red-100';}}; return (<div className="bg-white p-4 rounded-lg shadow-md mb-4 cursor-pointer" onClick={()=>navigate(`/contracts/${contract.id}`)}><div className="flex justify-between"><div><h3 className="font-bold text-gray-800">{contract.produceName}</h3><p className="text-sm text-gray-500">{contract.farmerName} to {contract.vendorName}</p></div><span className={`px-2 py-1 text-xs font-semibold rounded-full ${color(contract.status)}`}>{contract.status}</span></div><div className="mt-4 border-t pt-4 grid grid-cols-2 text-sm"><div><p className="text-gray-500">Quantity</p><p className="font-semibold">{contract.quantity} kg</p></div><div><p className="text-gray-500">Total Price</p><p className="font-semibold">KES {contract.totalPrice.toLocaleString()}</p></div><div><p className="text-gray-500">Deadline</p><p className="font-semibold">{contract.deliveryDeadline}</p></div>{contract.paymentDate && <div><p className="text-gray-500">Paid On</p><p className="font-semibold">{contract.paymentDate}</p></div>}</div></div>); };
