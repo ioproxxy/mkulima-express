@@ -1,4 +1,4 @@
-// Auth Context with Supabase Integration
+// Auth Context with Supabase Integration (enhanced)
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { sendOTP, verifyOTP, signOut, initAuthSession, subscribeToAuthChanges } from '../supabaseHelpers';
@@ -14,54 +14,61 @@ interface MinimalProfileData {
 
 interface AuthContextType {
   user: User | null;
-  loadingAuth: boolean;
+  isAuthLoading: boolean;
+  isSubmitting: boolean;
+  authError: string | null;
   // OTP based
-  login: (email: string) => Promise<boolean>; // send OTP
-  verifyCode: (email: string, code: string) => Promise<{ success: boolean; needsOnboarding: boolean }>;
+  login: (email: string, intendedRole?: UserRole) => Promise<boolean>; // send OTP
+  verifyCode: (email: string, code: string) => Promise<{ success: boolean }>;
 
   // Password based
-  loginWithPassword: (email: string, password: string, role?: UserRole) => Promise<{ success: boolean; createdMinimal?: boolean }>;
-  registerWithPassword: (profileData: MinimalProfileData, password: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string) => Promise<{ success: boolean }>;
+  registerWithPassword: (profileData: MinimalProfileData, password: string) => Promise<{ success: boolean }>;
 
-  // Legacy profile creation (after OTP flow)
-  registerProfile: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => Promise<void>;
+  // Utilities
   logout: () => Promise<void>;
+  setIntendedRole: (role: UserRole | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// --- Helpers --- //
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+const passwordPolicyOk = (pw: string) => /^(?=.*[A-Za-z])(?=.*\d).{6,}$/.test(pw); // at least 6 chars, letter + number
+
+const mapSupabaseError = (message: string) => {
+  if (/Invalid login credentials/i.test(message)) return 'Incorrect email or password';
+  if (/Email not confirmed/i.test(message)) return 'Please confirm your email before logging in';
+  if (/Password should be/i.test(message)) return 'Password too weak';
+  if (/user already exists/i.test(message)) return 'An account with this email already exists';
+  return message;
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [isAuthLoading, setAuthLoading] = useState(true);
+  const [isSubmitting, setSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [intendedRole, setIntendedRole] = useState<UserRole | null>(null);
   const { users, addUser } = useData();
 
   // Initialize auth session on mount
   useEffect(() => {
     let mounted = true;
-
-    const initialize = async () => {
+    (async () => {
       try {
         const profile = await initAuthSession();
-        if (mounted && profile) {
-          setUser(profile);
-        }
-      } catch (error) {
+        if (mounted && profile) setUser(profile);
+      } catch (error: any) {
         console.error('Auth initialization error:', error);
       } finally {
-        if (mounted) {
-          setLoadingAuth(false);
-        }
+        if (mounted) setAuthLoading(false);
       }
-    };
-
-    initialize();
-
-    return () => {
-      mounted = false;
-    };
+    })();
+    return () => { mounted = false; };
   }, []);
 
-  // Subscribe to auth state changes
+  // Subscribe to auth changes
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(({ session, profile }) => {
       if (profile) {
@@ -70,56 +77,97 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null);
       }
     });
-
     return unsubscribe;
   }, []);
 
-  // Update user when users list changes (for profile updates)
+  // Keep local user updated with data context
   useEffect(() => {
     if (user) {
-      const updatedUser = users.find(u => u.id === user.id);
-      if (updatedUser && JSON.stringify(updatedUser) !== JSON.stringify(user)) {
-        setUser(updatedUser);
-      }
+      const updated = users.find(u => u.id === user.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(user)) setUser(updated);
     }
   }, [users, user]);
 
-  // OTP Login (request code)
-  const login = async (email: string): Promise<boolean> => {
+  // Ensure profile exists (for OTP or first password login)
+  const ensureProfile = async (email: string) => {
+    const authUser = (await supabase.auth.getUser()).data.user;
+    if (!authUser) return null;
+    const existing = users.find(u => u.id === authUser.id);
+    if (existing) return existing;
+    const role = intendedRole || UserRole.VENDOR; // fallback vendor
+    const newUser: User = {
+      id: authUser.id,
+      name: email.split('@')[0],
+      email: normalizeEmail(email),
+      role,
+      location: '',
+      farmSize: '',
+      businessName: '',
+      rating: 0,
+      reviews: 0,
+      avatarUrl: '',
+      walletBalance: 0,
+    } as User;
+    const created = await addUser(newUser);
+    setUser(created);
+    return created;
+  };
+
+  // OTP: send code
+  const login = async (email: string, role?: UserRole): Promise<boolean> => {
+    setAuthError(null);
+    setSubmitting(true);
     try {
-      await sendOTP(email);
+      const normalized = normalizeEmail(email);
+      if (role) setIntendedRole(role);
+      await sendOTP(normalized);
       toast.info('Check your email for the login code');
       return true;
     } catch (error: any) {
-      toast.error('Failed to send code: ' + error.message);
+      const msg = mapSupabaseError(error.message || 'Failed to send code');
+      setAuthError(msg);
+      toast.error(msg);
       return false;
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Verify OTP
-  const verifyCode = async (email: string, code: string): Promise<{ success: boolean; needsOnboarding: boolean }> => {
+  // OTP: verify
+  const verifyCode = async (email: string, code: string): Promise<{ success: boolean }> => {
+    setAuthError(null);
+    setSubmitting(true);
     try {
-      const { profile } = await verifyOTP(email, code);
-      
+      const normalized = normalizeEmail(email);
+      const { profile } = await verifyOTP(normalized, code);
       if (profile) {
         setUser(profile);
-        return { success: true, needsOnboarding: false };
-      } else {
-        // User authenticated but no profile exists - needs onboarding
-        return { success: true, needsOnboarding: true };
+        return { success: true };
       }
+      // create profile automatically
+      await ensureProfile(normalized);
+      toast.success('Welcome! Profile initialized.');
+      return { success: true };
     } catch (error: any) {
-      toast.error('Invalid code: ' + error.message);
-      return { success: false, needsOnboarding: false };
+      const msg = mapSupabaseError(error.message || 'Verification failed');
+      setAuthError(msg);
+      toast.error(msg);
+      return { success: false };
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Password login with optional minimal profile auto-creation
-  const loginWithPassword = async (email: string, password: string, role?: UserRole): Promise<{ success: boolean; createdMinimal?: boolean }> => {
+  // Password login
+  const loginWithPassword = async (email: string, password: string): Promise<{ success: boolean }> => {
+    setAuthError(null);
+    setSubmitting(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const normalized = normalizeEmail(email);
+      const { data, error } = await supabase.auth.signInWithPassword({ email: normalized, password });
       if (error) throw error;
       if (!data.session) {
+        setAuthError('Login failed');
         toast.error('Login failed');
         return { success: false };
       }
@@ -128,127 +176,88 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(profile);
         return { success: true };
       }
-      // No profile row exists - create a minimal one if role provided
-      if (!role) {
-        toast.info('Please complete registration');
-        return { success: true };
-      }
-      const authUser = data.user;
-      const newUser: User = {
-        id: authUser.id,
-        name: email.split('@')[0],
-        email,
-        role,
-        location: '',
-        farmSize: '',
-        businessName: '',
-        rating: 0,
-        reviews: 0,
-        avatarUrl: '',
-        walletBalance: 0,
-      } as User;
-      const created = await addUser(newUser);
-      setUser(created);
-      toast.success('Account activated. Complete your profile.');
-      return { success: true, createdMinimal: true };
+      await ensureProfile(normalized);
+      toast.success('Profile created');
+      return { success: true };
     } catch (error: any) {
-      toast.error(error.message || 'Password login failed');
+      const msg = mapSupabaseError(error.message || 'Password login failed');
+      setAuthError(msg);
+      toast.error(msg);
       return { success: false };
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Password-based registration (sign up + create minimal profile row)
-  const registerWithPassword = async (
-    profileData: MinimalProfileData,
-    password: string
-  ) => {
+  // Registration
+  const registerWithPassword = async (profileData: MinimalProfileData, password: string): Promise<{ success: boolean }> => {
+    setAuthError(null);
+    setSubmitting(true);
     try {
-      const { data, error } = await supabase.auth.signUp({ 
-        email: profileData.email, 
+      const email = normalizeEmail(profileData.email);
+      if (!passwordPolicyOk(password)) {
+        const msg = 'Password must be 6+ chars and include a number';
+        setAuthError(msg); toast.error(msg); return { success: false };
+      }
+      setIntendedRole(profileData.role);
+      const { data, error } = await supabase.auth.signUp({
+        email,
         password,
         options: { emailRedirectTo: window.location.origin + '/#/login' }
       });
       if (error) throw error;
-      const authUser = data.user;
-      if (!authUser) throw new Error('User not created');
-      const newUser: User = {
-        id: authUser.id,
-        name: profileData.name,
-        email: profileData.email,
-        role: profileData.role,
-        // defaults for later profile update
-        location: '',
-        farmSize: '',
-        businessName: '',
-        rating: 0,
-        reviews: 0,
-        avatarUrl: '',
-        walletBalance: 0,
-      } as User;
-      const created = await addUser(newUser);
-      setUser(created);
-      toast.success('Account created successfully. Check your email to confirm then complete profile.');
-    } catch (error: any) {
-      toast.error('Registration failed: ' + error.message);
-      throw error;
-    }
-  };
 
-  // Legacy profile creation after OTP auth
-  const registerProfile = async (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => {
-    try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (!authUser) {
-        throw new Error('No authenticated user found');
+      // If session exists immediately, create profile row now; otherwise wait until login
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        await ensureProfile(email);
+        toast.success('Account created');
+      } else {
+        toast.info('Check your email to confirm your account');
       }
-
-      const newUser: User = {
-        ...profileData,
-        id: authUser.id,
-        rating: 0,
-        reviews: 0,
-        avatarUrl: '',
-        walletBalance: 0,
-      };
-
-      const createdUser = await addUser(newUser);
-      setUser(createdUser);
-      toast.success('Profile created successfully!');
+      return { success: true };
     } catch (error: any) {
-      toast.error('Failed to create profile: ' + error.message);
-      throw error;
+      const msg = mapSupabaseError(error.message || 'Registration failed');
+      setAuthError(msg);
+      toast.error(msg);
+      return { success: false };
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const logout = async () => {
+    setSubmitting(true);
     try {
       await signOut();
       setUser(null);
-      toast.info('Logged out successfully');
+      setIntendedRole(null);
+      toast.info('Logged out');
     } catch (error: any) {
       toast.error('Logout failed: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const value = useMemo(() => ({
     user,
-    loadingAuth,
+    isAuthLoading,
+    isSubmitting,
+    authError,
     login,
     verifyCode,
     loginWithPassword,
     registerWithPassword,
-    registerProfile,
     logout,
-  }), [user, loadingAuth]);
+    setIntendedRole,
+  }), [user, isAuthLoading, isSubmitting, authError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
