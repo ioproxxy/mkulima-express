@@ -6,6 +6,12 @@ import { useData } from './DataContext';
 import { toast } from 'react-toastify';
 import { supabase } from '../supabaseClient';
 
+interface MinimalProfileData {
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
 interface AuthContextType {
   user: User | null;
   loadingAuth: boolean;
@@ -15,7 +21,7 @@ interface AuthContextType {
 
   // Password based
   loginWithPassword: (email: string, password: string) => Promise<boolean>;
-  registerWithPassword: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>, password: string) => Promise<void>;
+  registerWithPassword: (profileData: MinimalProfileData, password: string) => Promise<void>;
 
   // Legacy profile creation (after OTP flow)
   registerProfile: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => Promise<void>;
@@ -130,9 +136,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Password-based registration (sign up + create profile row)
+  // Password-based registration (sign up + create minimal profile row)
   const registerWithPassword = async (
-    profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>,
+    profileData: MinimalProfileData,
     password: string
   ) => {
     try {
@@ -140,20 +146,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
       const authUser = data.user;
       if (!authUser) throw new Error('User not created');
-
-      // Whitelist fields that exist in the users table
-      const newUser: Partial<User> = {
+      const newUser: User = {
         id: authUser.id,
         name: profileData.name,
         email: profileData.email,
-        location: profileData.location,
         role: profileData.role,
+        // defaults for later profile update
+        location: '',
+        farmSize: '',
+        businessName: '',
         rating: 0,
         reviews: 0,
-        // walletBalance omitted
-      };
-
-      const created = await addUser(newUser as User);
+        avatarUrl: '',
+        walletBalance: 0,
+      } as User;
+      const created = await addUser(newUser);
       setUser(created);
       toast.success('Account created successfully');
     } catch (error: any) {
@@ -166,21 +173,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const registerProfile = async (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error('No authenticated user found');
+      
+      if (!authUser) {
+        throw new Error('No authenticated user found');
+      }
 
-      // Whitelist fields that exist in the users table
-      const newUser: Partial<User> = {
+      const newUser: User = {
+        ...profileData,
         id: authUser.id,
-        name: profileData.name,
-        email: profileData.email,
-        location: profileData.location,
-        role: profileData.role,
         rating: 0,
         reviews: 0,
-        // walletBalance omitted
+        avatarUrl: '',
+        walletBalance: 0,
       };
 
-      const createdUser = await addUser(newUser as User);
+      const createdUser = await addUser(newUser);
       setUser(createdUser);
       toast.success('Profile created successfully!');
     } catch (error: any) {
