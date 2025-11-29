@@ -1,0 +1,359 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
+import { ToastContainer, toast, TypeOptions } from 'react-toastify';
+import { User, UserRole, Produce, Contract, ContractStatus } from './types';
+import { useAuth, AuthProvider } from './contexts/AuthContext';
+import { useData, DataProvider } from './contexts/DataContext';
+
+// --- ICONS --- //
+const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>;
+const ProduceIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}><path fillRule="evenodd" d="M10 2a.75.75 0 01.75.75v.943l.012.004.024.008.036.012.048.016.06.02.072.024.084.028.096.032.108.036.12.04.132.044.144.048.156.052.168.056.18.06.192.064.204.068.216.072.228.076.24.08.252.084.264.088.276.092.288.096.3.1.312.104.324.108.336.112.348.116.36.12.372.124.384.128.396.132.408.136.42.14.432.144.444.148.456.152.468.156.48.16.492.164.504.168.516.172.528.176.54.18.552.184.564.188.576.192.588.196.6.2.612.204.624.208.636.212.648.216.66.22.672.224.684.228.696.232.708.236.72.24.732.244.744.248.756.252.768.256.78.26.792.264.804.268.816.272.828.276.84.28.852.284.864.288.876.292.888.296.9.3.912.304.924.308.936.312.948.316.96.32.972.324.984.328.996.332 1.008.336 1.02.34 1.032.344 1.044.348 1.056.352 1.068.356 1.08.36 1.092.364 1.104.368 1.116.372 1.128.376 1.14.38 1.152.384 1.164.388 1.176.392 1.188.396 1.2.4V3.52a.75.75 0 01-1.5 0V2.75A.75.75 0 0110 2zM5.015 12.28a.75.75 0 01.735-.02l.005.002 2.22 1.11a.75.75 0 010 1.34l-2.22 1.11a.75.75 0 01-1.035-.65V12.93a.75.75 0 01.3-.65zM14.985 12.28a.75.75 0 00-.735-.02l-.005.002-2.22 1.11a.75.75 0 000 1.34l2.22 1.11a.75.75 0 001.035-.65V12.93a.75.75 0 00-.3-.65z" clipRule="evenodd" /><path d="M10 4.5c-2.21 0-4 1.79-4 4v.253c.005.016.01.032.016.048.163.421.38.814.645 1.172.265.358.57.68.905.96l.01.008.01.008c.335.28.702.523 1.09.724l.01.005c.39.2.8.358 1.21.472l.01.003c.41.113.828.17 1.244.17 2.21 0 4-1.79 4-4s-1.79-4-4-4zm0 6.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" /></svg>;
+const ContractIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}><path d="M5.75 2.5a.75.75 0 00-1.5 0v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75zM14.25 2.5a.75.75 0 00-1.5 0v1.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75zM3.75 8a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H4.5a.75.75 0 01-.75-.75zM3 11.25a.75.75 0 01.75-.75h12.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75zM3.75 14a.75.75 0 01.75-.75h6.5a.75.75 0 010 1.5H4.5a.75.75 0 01-.75-.75z" /><path fillRule="evenodd" d="M2 5a3 3 0 013-3h10a3 3 0 013 3v10a3 3 0 01-3 3H5a3 3 0 01-3-3V5zm3.25-1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V4.75a.75.75 0 01.75-.75zm8.5.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0V4.75z" clipRule="evenodd" /></svg>;
+const UserIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-5.5-2.5a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0zM10 12a5.99 5.99 0 00-4.793 2.39A6.483 6.483 0 0010 16.5a6.483 6.483 0 004.793-2.11A5.99 5.99 0 0010 12z" clipRule="evenodd" /></svg>;
+const LogoutIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}><path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V5.414l7.293 7.293a1 1 0 001.414-1.414L5.414 4H15a1 1 0 100-2H4a1 1 0 00-1 1z" clipRule="evenodd" /></svg>;
+const Spinner = () => (
+  <div className="spinner-overlay">
+    <div className="spinner"></div>
+  </div>
+);
+
+// --- LANDING PAGE --- //
+const LandingPage = () => {
+  return (
+    <div className="landing-page">
+      <h1>Welcome to Our App</h1>
+      <p>Your one-stop solution for managing produces and contracts.</p>
+      <Link to="/login" className="primary-button">
+        Get Started
+      </Link>
+    </div>
+  );
+};
+
+// --- DASHBOARD --- //
+const Dashboard = () => {
+  const { user, logout } = useAuth();
+  const { produces, contracts } = useData();
+
+  const handleLogout = () => {
+    logout();
+  };
+
+  return (
+    <div className="dashboard">
+      <header>
+        <h1>Hello, {user?.name}</h1>
+        <button onClick={handleLogout} className="logout-button">
+          Logout
+        </button>
+      </header>
+      <main>
+        <section className="summary">
+          <div className="card">
+            <h2>Total Produces</h2>
+            <p>{produces.length}</p>
+          </div>
+          <div className="card">
+            <h2>Total Contracts</h2>
+            <p>{contracts.length}</p>
+          </div>
+        </section>
+        <section className="recent-activity">
+          <h2>Recent Activity</h2>
+          {/* ...some code here to display recent activity... */}
+        </section>
+      </main>
+    </div>
+  );
+};
+
+// --- VERIFY LOGIN PAGE --- //
+const VerifyLogin = () => {
+  const navigate = useNavigate();
+  const { verifyCode, login } = useAuth();
+  const location = useLocation();
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const email = (location.state as any)?.email;
+
+  if (!email) {
+    // If there's no email, we can't verify, so go back to login
+    return <Navigate to="/login" />;
+  }
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { success } = await verifyCode(email, code);
+    if (success) {
+      toast.success('Login successful!');
+      navigate('/');
+    }
+    setLoading(false);
+  };
+
+  const handleResend = async () => {
+    setLoading(true);
+    await login(email); // This will resend the OTP
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-page">
+      <form onSubmit={handleVerify} className="auth-form">
+        <h2>Verify Login</h2>
+        <p>A code has been sent to <strong>{email}</strong>. Please enter it below.</p>
+        <div className="form-group">
+          <label htmlFor="code">Verification Code</label>
+          <input
+            id="code"
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="e.g. 123456"
+            required
+          />
+        </div>
+        <button type="submit" disabled={loading} className="primary-button">
+          {loading ? 'Verifying...' : 'Verify & Login'}
+        </button>
+        <div className="auth-links">
+          <button type="button" onClick={handleResend} disabled={loading} className="link-button">
+            Resend Code
+          </button>
+          <Link to="/login">Back to Login</Link>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+
+// --- REGISTER PAGE --- //
+const Register = () => {
+  const navigate = useNavigate();
+  const { registerWithPassword } = useAuth();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<UserRole>('client');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { success } = await registerWithPassword({ name, email, role }, password);
+    if (success) {
+      // On success, redirect to login with a message
+      navigate('/login', { state: { message: 'Registration successful! Please check your email to confirm your account and log in.' } });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-page">
+      <form onSubmit={handleRegister} className="auth-form">
+        <h2>Create Account</h2>
+        <div className="form-group">
+          <label htmlFor="name">Name</label>
+          <input
+            id="name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="role">Role</label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as UserRole)}
+          >
+            <option value="client">Client</option>
+            <option value="producer">Producer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="confirmPassword">Confirm Password</label>
+          <input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
+        <button type="submit" disabled={loading} className="primary-button">
+          {loading ? 'Registering...' : 'Register'}
+        </button>
+        <div className="auth-links">
+          <Link to="/login">Already have an account? Login</Link>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// --- LOGIN PAGE --- //
+const Login = () => {
+  const navigate = useNavigate();
+  const { login, loginWithPassword, setIntendedRole, authError } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [mode, setMode] = useState<'otp' | 'password'>('otp');
+  const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const message = (location.state as any)?.message;
+
+  useEffect(() => {
+    if (message) {
+      toast.info(message);
+    }
+  }, [message]);
+
+  useEffect(() => {
+    const role = (location.state as any)?.role as UserRole;
+    if (role) setIntendedRole(role);
+  }, [location, setIntendedRole]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    let success = false;
+    if (mode === 'otp') {
+      const { result } = await login(email);
+      success = !!result;
+      if (!success) {
+        toast.error('Login failed. Please check your email and the code.');
+      }
+    } else {
+      const { success: pwdSuccess } = await loginWithPassword(email, password);
+      success = pwdSuccess;
+      if (!success) {
+        toast.error('Login failed. Please check your email and password.');
+      }
+    }
+
+    if (success) {
+      navigate('/');
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-page">
+      <form onSubmit={handleLogin} className="auth-form">
+        <h2>Login</h2>
+
+        {authError && <div className="form-error">{authError}</div>}
+
+        <div className="auth-mode-switcher">
+          <button type="button" onClick={() => setMode('otp')} className={mode === 'otp' ? 'active' : ''}>
+            Use Email Code
+          </button>
+          <button type="button" onClick={() => setMode('password')} className={mode === 'password' ? 'active' : ''}>
+            Use Password
+          </button>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+
+        {mode === 'password' && (
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+        )}
+
+        {mode === 'otp' && (
+          <div className="form-group">
+            <label htmlFor="otp"> OTP</label>
+            <input
+              id="otp"
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter OTP sent to your email"
+              required
+            />
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} className="primary-button">
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+
+        <div className="auth-links">
+          <Link to="/register">Create an account</Link>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// --- APP COMPONENT --- //
+const App = () => {
+  const { user, loadingAuth } = useAuth();
+
+  if (loadingAuth) {
+    return <Spinner />;
+  }
+
+  return (
+    <div className="app-container">
+      <HashRouter>
+        <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
+        <Routes>
+          <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify-login" element={<VerifyLogin />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </HashRouter>
+    </div>
+  );
+};
+
+export default App;
