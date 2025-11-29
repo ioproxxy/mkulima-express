@@ -128,17 +128,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(profile);
         return { success: true };
       }
-      // No profile row exists - create a minimal one if role provided
-      if (!role) {
-        toast.info('Please complete registration');
-        return { success: true };
-      }
+      // No profile row exists - create a minimal one if role provided (default to VENDOR to unblock vendor login)
+      const effectiveRole = role || UserRole.VENDOR;
       const authUser = data.user;
       const newUser: User = {
         id: authUser.id,
         name: email.split('@')[0],
         email,
-        role,
+        role: effectiveRole,
         location: '',
         farmSize: '',
         businessName: '',
@@ -169,12 +166,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         options: { emailRedirectTo: window.location.origin + '/#/login' }
       });
       if (error) throw error;
-      const authUser = data.user;
+
+      // Some projects require email confirmation before a session exists.
+      // Attempt to fetch a session; if none, inform the user and return early.
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.info('Check your email to confirm your account, then log in.');
+        return; // Do not create profile yet; RLS would fail without auth.uid()
+      }
+
+      const authUser = data.user || sessionData.session.user;
       if (!authUser) throw new Error('User not created');
+
       const newUser: User = {
         id: authUser.id,
         name: profileData.name,
-        email: profileData.email,
+        email: profileData.email.toLowerCase(),
         role: profileData.role,
         // defaults for later profile update
         location: '',
@@ -187,7 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } as User;
       const created = await addUser(newUser);
       setUser(created);
-      toast.success('Account created successfully. Check your email to confirm then complete profile.');
+      toast.success('Account created. You can now access your dashboard.');
     } catch (error: any) {
       toast.error('Registration failed: ' + error.message);
       throw error;
