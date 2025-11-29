@@ -20,7 +20,7 @@ interface AuthContextType {
   verifyCode: (email: string, code: string) => Promise<{ success: boolean; needsOnboarding: boolean }>;
 
   // Password based
-  loginWithPassword: (email: string, password: string) => Promise<boolean>;
+  loginWithPassword: (email: string, password: string, role?: UserRole) => Promise<{ success: boolean; createdMinimal?: boolean }>;
   registerWithPassword: (profileData: MinimalProfileData, password: string) => Promise<void>;
 
   // Legacy profile creation (after OTP flow)
@@ -114,25 +114,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Password login
-  const loginWithPassword = async (email: string, password: string): Promise<boolean> => {
+  // Password login with optional minimal profile auto-creation
+  const loginWithPassword = async (email: string, password: string, role?: UserRole): Promise<{ success: boolean; createdMinimal?: boolean }> => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (!data.session) {
         toast.error('Login failed');
-        return false;
+        return { success: false };
       }
       const profile = await initAuthSession();
       if (profile) {
         setUser(profile);
-      } else {
-        toast.info('Complete your profile');
+        return { success: true };
       }
-      return true;
+      // No profile row exists - create a minimal one if role provided
+      if (!role) {
+        toast.info('Please complete registration');
+        return { success: true };
+      }
+      const authUser = data.user;
+      const newUser: User = {
+        id: authUser.id,
+        name: email.split('@')[0],
+        email,
+        role,
+        location: '',
+        farmSize: '',
+        businessName: '',
+        rating: 0,
+        reviews: 0,
+        avatarUrl: '',
+        walletBalance: 0,
+      } as User;
+      const created = await addUser(newUser);
+      setUser(created);
+      toast.success('Account activated. Complete your profile.');
+      return { success: true, createdMinimal: true };
     } catch (error: any) {
       toast.error(error.message || 'Password login failed');
-      return false;
+      return { success: false };
     }
   };
 
@@ -142,7 +163,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     password: string
   ) => {
     try {
-      const { data, error } = await supabase.auth.signUp({ email: profileData.email, password });
+      const { data, error } = await supabase.auth.signUp({ 
+        email: profileData.email, 
+        password,
+        options: { emailRedirectTo: window.location.origin + '/#/login' }
+      });
       if (error) throw error;
       const authUser = data.user;
       if (!authUser) throw new Error('User not created');
@@ -162,7 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } as User;
       const created = await addUser(newUser);
       setUser(created);
-      toast.success('Account created successfully');
+      toast.success('Account created successfully. Check your email to confirm then complete profile.');
     } catch (error: any) {
       toast.error('Registration failed: ' + error.message);
       throw error;
