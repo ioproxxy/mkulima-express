@@ -1,0 +1,156 @@
+// Auth Context with Supabase Integration
+import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
+import { User, UserRole } from '../types';
+import { sendOTP, verifyOTP, signOut, initAuthSession, subscribeToAuthChanges } from '../supabaseHelpers';
+import { useData } from './DataContext';
+import { toast } from 'react-toastify';
+
+interface AuthContextType {
+  user: User | null;
+  loadingAuth: boolean;
+  login: (email: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  verifyCode: (email: string, code: string) => Promise<{ success: boolean; needsOnboarding: boolean }>;
+  registerProfile: (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | null>(null);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const { users, addUser } = useData();
+
+  // Initialize auth session on mount
+  useEffect(() => {
+    let mounted = true;
+
+    const initialize = async () => {
+      try {
+        const profile = await initAuthSession();
+        if (mounted && profile) {
+          setUser(profile);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        if (mounted) {
+          setLoadingAuth(false);
+        }
+      }
+    };
+
+    initialize();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Subscribe to auth state changes
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthChanges(({ session, profile }) => {
+      if (profile) {
+        setUser(profile);
+      } else if (!session) {
+        setUser(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Update user when users list changes (for profile updates)
+  useEffect(() => {
+    if (user) {
+      const updatedUser = users.find(u => u.id === user.id);
+      if (updatedUser && JSON.stringify(updatedUser) !== JSON.stringify(user)) {
+        setUser(updatedUser);
+      }
+    }
+  }, [users]);
+
+  const login = async (email: string): Promise<boolean> => {
+    try {
+      await sendOTP(email);
+      toast.info('Check your email for the login code');
+      return true;
+    } catch (error: any) {
+      toast.error('Failed to send code: ' + error.message);
+      return false;
+    }
+  };
+
+  const verifyCode = async (email: string, code: string): Promise<{ success: boolean; needsOnboarding: boolean }> => {
+    try {
+      const { profile } = await verifyOTP(email, code);
+      
+      if (profile) {
+        setUser(profile);
+        return { success: true, needsOnboarding: false };
+      } else {
+        // User authenticated but no profile exists - needs onboarding
+        return { success: true, needsOnboarding: true };
+      }
+    } catch (error: any) {
+      toast.error('Invalid code: ' + error.message);
+      return { success: false, needsOnboarding: false };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      toast.info('Logged out successfully');
+    } catch (error: any) {
+      toast.error('Logout failed: ' + error.message);
+    }
+  };
+
+  const registerProfile = async (profileData: Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>) => {
+    try {
+      // Get current auth user ID
+      const { data: { user: authUser } } = await import('../supabaseClient').then(m => m.supabase.auth.getUser());
+      
+      if (!authUser) {
+        throw new Error('No authenticated user found');
+      }
+
+      const newUser: User = {
+        ...profileData,
+        id: authUser.id, // Use Supabase auth user ID
+        rating: 0,
+        reviews: 0,
+        avatarUrl: `https://picsum.photos/seed/${authUser.id}/200`,
+        walletBalance: 0,
+      };
+
+      const createdUser = await addUser(newUser);
+      setUser(createdUser);
+      toast.success('Profile created successfully!');
+    } catch (error: any) {
+      toast.error('Failed to create profile: ' + error.message);
+      throw error;
+    }
+  };
+
+  const value = useMemo(() => ({
+    user,
+    loadingAuth,
+    login,
+    logout,
+    verifyCode,
+    registerProfile,
+  }), [user, loadingAuth]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

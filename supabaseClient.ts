@@ -1,0 +1,12 @@
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+// Guard against missing env during runtime; helps DX without crashing the app
+if (!supabaseUrl || !supabaseAnonKey) {
+  // eslint-disable-next-line no-console
+  console.warn('[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set. Supabase client will be unusable until provided.')
+}
+
+export const supabase = createClient(supabaseUrl || 'https://clnzuwagvwktowdomyrz.supabase.co', supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNsbnp1d2FndndrdG93ZG9teXJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyOTAzMTgsImV4cCI6MjA3OTg2NjMxOH0.CwGVd42Y7bqOl9rSAjQdxWUdjduW5cSeoqpI7vEh3CM')
