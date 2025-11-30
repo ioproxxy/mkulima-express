@@ -207,7 +207,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const { addUser, refreshData } = useData();
+  const { addUser, updateUser, refreshData } = useData();
   const { notify } = useNotifier();
 
   useEffect(() => {
@@ -270,7 +270,8 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
         throw error;
     }
 
-    if (data.user) {
+    if (data.user && data.session) {
+        // User created and session active (email confirmation likely off or not required immediately)
         const newUser: User = {
             id: data.user.id, // Use the Auth ID
             name: userData.name,
@@ -287,12 +288,32 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
         
         try {
             await addUser(newUser);
-            // Wait for profile propagation
             await refreshData();
-        } catch (dbError) {
+        } catch (dbError: any) {
              console.error("Database Insert Error:", dbError);
-             // Optional: cleanup auth user if DB insert fails
+             // Error 42501: RLS Policy violation (Permission denied)
+             // Error 23505: Duplicate key (Unique violation)
+             // If these occur, it usually means a trigger already created the user row, or we don't have insert permissions but might have update permissions.
+             if (dbError.code === '42501' || dbError.code === '23505') {
+                 console.log("Attempting profile update instead of insert due to existing row or policy restriction.");
+                 try {
+                     await updateUser(newUser);
+                     await refreshData();
+                 } catch (updateError) {
+                     console.error("Database Update Error:", updateError);
+                     throw updateError;
+                 }
+             } else {
+                 throw dbError;
+             }
         }
+    } else if (data.user && !data.session) {
+        // User created but no session. Email confirmation likely required.
+        notify("Registration successful! Please check your email to verify your account.", "success");
+        setLoading(false);
+        // Do not redirect automatically as they need to verify first.
+        // Returning here prevents the auto-redirect in RegistrationScreen's useEffect
+        return; 
     }
   };
 
