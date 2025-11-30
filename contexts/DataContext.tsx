@@ -1,6 +1,6 @@
 // Data Context with Supabase Integration
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
-import { User, Produce, Contract, Transaction, Message, ContractStatus, TransactionDirection } from '../types';
+import { User, Produce, Contract, Transaction, Message, ContractStatus, TransactionDirection, ContractStatusEntry } from '../types';
 import { dbOperations, subscribeToMessages } from '../supabaseHelpers';
 import { toast } from 'react-toastify';
 
@@ -18,12 +18,13 @@ interface DataContextType {
   addTransaction: (newTransaction: Transaction) => Promise<void>;
   addMessage: (newMessage: Message) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
-  // Escrow & offers
   proposeContract: (offer: Contract) => Promise<Contract>;
   acceptContract: (contractId: string) => Promise<void>;
   rejectContract: (contractId: string) => Promise<void>;
   confirmDelivery: (contractId: string) => Promise<void>;
   releaseEscrow: (contractId: string) => Promise<void>;
+  finalizeContract: (contractId: string) => Promise<void>;
+  disputeContract: (contractId: string, reason: string, filedBy: string) => Promise<void>; // new
   loading: boolean;
 }
 
@@ -188,25 +189,35 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     await updateUser(updated);
   };
 
+  const pushStatus = (c: Contract, next: ContractStatus): Contract => {
+    const history: ContractStatusEntry[] = c.statusHistory ? [...c.statusHistory] : [];
+    history.push({ status: next, timestamp: new Date().toISOString() });
+    return { ...c, status: next, statusHistory: history };
+  };
+
+  const updateContractWithHistory = async (updated: Contract) => {
+    const result = await dbOperations.updateContract(updated);
+    setContracts(prev => prev.map(c => c.id === updated.id ? result : c));
+    return result;
+  };
+
   // Vendor proposes an offer and funds escrow immediately
   const proposeContract = async (offer: Contract): Promise<Contract> => {
     try {
       // Validate
-      const vendor = findUser(offer.vendorId);
-      const farmer = findUser(offer.farmerId);
+      const vendor = users.find(u => u.id === offer.vendorId);
+      const farmer = users.find(u => u.id === offer.farmerId);
       if (!vendor || !farmer) throw new Error('Invalid parties');
       if ((vendor.walletBalance || 0) < offer.totalPrice) throw new Error('Insufficient wallet balance to fund escrow');
 
       // Create contract in PENDING status
-      const pending: Contract = {
-        ...offer,
-        status: ContractStatus.PENDING,
-      };
+      const pending = { ...offer, status: ContractStatus.PENDING, statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }] } as Contract;
       const created = await dbOperations.createContract(pending);
       setContracts(prev => [created, ...prev]);
 
       // Hold funds in escrow: debit vendor
-      await updateWalletBalance(vendor.id, -offer.totalPrice);
+      const updatedVendor: User = { ...vendor, walletBalance: vendor.walletBalance - offer.totalPrice };
+      await updateUser(updatedVendor);
       await recordTransaction(vendor.id, -offer.totalPrice, `Escrow hold for ${offer.produceName}`, created.id);
       toast.success('Offer sent and escrow funded');
       return created;
@@ -220,8 +231,9 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const acceptContract = async (contractId: string) => {
     const c = contracts.find(x => x.id === contractId);
     if (!c) throw new Error('Contract not found');
-    const updated: Contract = { ...c, status: ContractStatus.ACTIVE };
-    await updateContract(updated);
+    if (c.status !== ContractStatus.PENDING) throw new Error('Only pending contracts can be accepted');
+    const updated = pushStatus(c, ContractStatus.ACTIVE);
+    await updateContractWithHistory(updated);
     toast.success('Contract accepted');
   };
 
@@ -229,11 +241,12 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const rejectContract = async (contractId: string) => {
     const c = contracts.find(x => x.id === contractId);
     if (!c) throw new Error('Contract not found');
+    if (c.status !== ContractStatus.PENDING) throw new Error('Only pending contracts can be rejected');
     // Refund vendor
     await updateWalletBalance(c.vendorId, c.totalPrice);
     await recordTransaction(c.vendorId, c.totalPrice, `Escrow refund for ${c.produceName}`, c.id);
-    const updated: Contract = { ...c, status: ContractStatus.CANCELLED };
-    await updateContract(updated);
+    const updated = pushStatus(c, ContractStatus.CANCELLED);
+    await updateContractWithHistory(updated);
     toast.info('Offer rejected and escrow refunded');
   };
 
@@ -242,8 +255,8 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     const c = contracts.find(x => x.id === contractId);
     if (!c) throw new Error('Contract not found');
     if (c.status !== ContractStatus.ACTIVE) throw new Error('Contract not active');
-    const updated: Contract = { ...c, status: ContractStatus.DELIVERY_CONFIRMED };
-    await updateContract(updated);
+    const updated = pushStatus(c, ContractStatus.DELIVERY_CONFIRMED);
+    await updateContractWithHistory(updated);
     toast.success('Delivery confirmed');
   };
 
@@ -251,20 +264,37 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   const releaseEscrow = async (contractId: string) => {
     const c = contracts.find(x => x.id === contractId);
     if (!c) throw new Error('Contract not found');
-    if (c.status !== ContractStatus.DELIVERY_CONFIRMED && c.status !== ContractStatus.ACTIVE) throw new Error('Delivery not confirmed');
+    if (![ContractStatus.DELIVERY_CONFIRMED, ContractStatus.ACTIVE].includes(c.status)) throw new Error('Delivery not confirmed');
     // Credit farmer, mark payment released/completed
     await updateWalletBalance(c.farmerId, c.totalPrice);
     await recordTransaction(c.farmerId, c.totalPrice, `Payment released for ${c.produceName}`, c.id);
-    const updated: Contract = { ...c, status: ContractStatus.PAYMENT_RELEASED, paymentDate: new Date().toISOString() };
-    await updateContract(updated);
+    const updated: Contract = { ...pushStatus(c, ContractStatus.PAYMENT_RELEASED), paymentDate: new Date().toISOString() };
+    await updateContractWithHistory(updated);
     toast.success('Escrow released to farmer');
+  };
+
+  const finalizeContract = async (contractId: string) => {
+    const c = contracts.find(x => x.id === contractId);
+    if (!c) throw new Error('Contract not found');
+    if (c.status !== ContractStatus.PAYMENT_RELEASED) throw new Error('Payment not released yet');
+    const updated = pushStatus(c, ContractStatus.COMPLETED);
+    await updateContractWithHistory(updated);
+    toast.success('Contract completed');
+  };
+
+  const disputeContract = async (contractId: string, reason: string, filedBy: string) => {
+    const c = contracts.find(x => x.id === contractId);
+    if (!c) throw new Error('Contract not found');
+    if ([ContractStatus.COMPLETED, ContractStatus.CANCELLED].includes(c.status)) throw new Error('Cannot dispute completed/cancelled contract');
+    const updated: Contract = { ...pushStatus(c, ContractStatus.DISPUTED), disputeReason: reason, disputeFiledBy: filedBy };
+    await updateContractWithHistory(updated);
+    toast.warn('Contract disputed');
   };
 
   const value = useMemo(() => ({
     users, produce, contracts, transactions, messages,
-    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, addMessage, deleteUser,
-    // escrow & offer methods
-    proposeContract, acceptContract, rejectContract, confirmDelivery, releaseEscrow,
+    updateUser, updateContract: updateContractWithHistory, addContract, addProduce, addUser, addTransaction, addMessage, deleteUser,
+    proposeContract, acceptContract, rejectContract, confirmDelivery, releaseEscrow, finalizeContract, disputeContract,
     loading
   }), [users, produce, contracts, transactions, messages, loading]);
 

@@ -46,6 +46,20 @@ export enum ContractStatus {
   CANCELLED = 'Cancelled',
 }
 
+export interface ContractStatusEntry {
+  status: string;
+  timestamp: string;
+}
+
+export interface ContractLogistics {
+  partner?: string;
+  status?: string;
+  pickupTime?: string;
+  deliveryTime?: string;
+  pickupQRCode?: string;
+  deliveryQRCode?: string;
+}
+
 export interface Contract {
   id: string;
   produceId?: string; // optional, aligns with produce_id in other tables
@@ -59,6 +73,10 @@ export interface Contract {
   deliveryDeadline: string;
   paymentDate?: string;
   status: ContractStatus;
+  statusHistory?: ContractStatusEntry[];
+  disputeReason?: string; // newly added
+  disputeFiledBy?: string; // user id of who filed dispute
+  logistics?: ContractLogistics;
   createdAt?: string; // maps to created_at
 }
 

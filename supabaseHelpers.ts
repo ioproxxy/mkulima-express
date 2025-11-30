@@ -202,9 +202,11 @@ export const dbOperations = {
   },
   
   async createContract(contract: any) {
+    const base = toSnakeCase(contract);
+    if (!base.status_history) base.status_history = JSON.stringify([{ status: contract.status, timestamp: new Date().toISOString() }]);
     const { data, error } = await supabase
       .from('contracts')
-      .insert(toSnakeCase(contract))
+      .insert(base)
       .select()
       .single();
     if (error) throw error;
@@ -212,9 +214,14 @@ export const dbOperations = {
   },
   
   async updateContract(contract: any) {
+    const base = toSnakeCase(contract);
+    // Append to status_history when status changes
+    if (contract.status && contract.statusHistory) {
+      base.status_history = JSON.stringify(contract.statusHistory);
+    }
     const { data, error } = await supabase
       .from('contracts')
-      .upsert(toSnakeCase(contract))
+      .upsert(base)
       .select()
       .single();
     if (error) throw error;
