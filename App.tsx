@@ -499,7 +499,7 @@ const MapView: React.FC<{ users: User[]; currentUserId?: string }> = ({ users, c
                         style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -100%)' }}
                     >
                         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {user.name} {isCurrentUser && '(You)'} <br/> ({user.location.split(',')[0]})
+                          {user.name || 'User'} {isCurrentUser && '(You)'} <br/> ({(user.location || '').split(',')[0]})
                         </div>
                         <MapPinIcon className={`w-8 h-8 ${isCurrentUser ? 'text-blue-500' : isFarmer ? 'text-green-600' : 'text-amber-500'} drop-shadow-lg`} />
                     </div>
@@ -1031,7 +1031,7 @@ const DashboardScreen = () => {
   const activeContracts = relevantContracts.filter(c => c.status === ContractStatus.ACTIVE || c.status === ContractStatus.DELIVERY_CONFIRMED);
   const myProduce = produce.filter(p => p.farmerId === user.id);
   
-  const greeting = `Good afternoon, ${user.name.split(' ')[0]}!`;
+  const greeting = `Good afternoon, ${(user.name || 'User').split(' ')[0]}!`;
 
   return (
     <Layout>
