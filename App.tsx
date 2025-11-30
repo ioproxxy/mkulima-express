@@ -94,8 +94,8 @@ const LoginScreen = () => {
 const OnboardingScreen = () => { const { user } = useAuth(); const navigate=useNavigate(); useEffect(():any=>{ if(user) return navigate('/dashboard',{replace:true}); }); return (<div className="min-h-screen flex flex-col items-center justify-center bg-green-50 p-4"><div className="text-center mb-12"><LeafIcon className="w-16 h-16 text-green-600 mx-auto"/><h1 className="text-4xl font-bold text-green-800 mt-4">Join Mkulima Express</h1><p className="text-gray-600 mt-2">Select your role to get started.</p></div><div className="w-full max-w-sm bg-white p-8 rounded-2xl shadow-lg space-y-4"><button onClick={()=>navigate('/register/farmer')} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700">Farmer</button><button onClick={()=>navigate('/register/vendor')} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold text-lg hover:bg-amber-600">Vendor</button></div></div>); };
 
 // --- Registration (MINIMAL) --- //
-const FarmerRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving=true; try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.FARMER }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Farmer Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
-const VendorRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving=true; try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.VENDOR }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Vendor Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
+const FarmerRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving(true); try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.FARMER }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Farmer Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
+const VendorRegistrationScreen = () => { const { registerWithPassword, user } = useAuth(); const navigate=useNavigate(); const [form,setForm]=useState({ name:'', email:'', password:'' }); const [error,setError]=useState(''); const [saving,setSaving]=useState(false); useEffect(()=>{ if(user) navigate('/dashboard',{replace:true}); },[user]); const change=(e:React.ChangeEvent<HTMLInputElement>)=> setForm({...form,[e.target.name]:e.target.value}); const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setError(''); if(!form.name||!form.email||!form.password){ setError('All fields required'); return;} if(form.password.length<6){ setError('Password must be at least 6 characters'); return;} setSaving(true); try { await registerWithPassword({ name:form.name, email:form.email, role:UserRole.VENDOR }, form.password); navigate('/dashboard',{replace:true}); } catch(err:any){ setError(err.message||'Failed'); } finally { setSaving(false);} }; return (<Layout showNav={false}><Header title="Vendor Registration" showBack/><div className="p-4"><form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4"><InputField label="Full Name" name="name" value={form.name} onChange={change}/><InputField label="Email" name="email" type="email" value={form.email} onChange={change}/><InputField label="Password" name="password" type="password" value={form.password} onChange={change} placeholder="At least 6 characters"/>{error && <p className="text-sm text-red-600">{error}</p>}<button type="submit" disabled={saving} className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 disabled:bg-gray-300">{saving? 'Saving...':'Register'}</button></form></div></Layout>); };
 
 // Keep authenticated users within app when route not found
 const FallbackRoute = () => {
@@ -131,6 +131,508 @@ const ProduceCard: React.FC<{ produce:Produce }> = ({ produce }) => {
         </div>
       </div>
     </div>
+  );
+};
+
+// --- Dashboard Screen --- //
+const DashboardScreen = () => {
+  const { user } = useAuth();
+  const { produce, contracts } = useData();
+  const navigate = useNavigate();
+  if (!user) return null;
+
+  const isFarmer = user.role === UserRole.FARMER;
+  const isVendor = user.role === UserRole.VENDOR;
+
+  const myProduce = isFarmer ? produce.filter(p => p.farmerId === user.id) : [];
+  const myContracts = contracts.filter(c => isFarmer ? c.farmerId === user.id : c.vendorId === user.id);
+  const activeContracts = myContracts.filter(c => c.status === ContractStatus.ACTIVE || c.status === ContractStatus.PENDING);
+  const completedContracts = myContracts.filter(c => c.status === ContractStatus.COMPLETED);
+
+  return (
+    <Layout>
+      <Header title="Dashboard" />
+      <div className="p-4 space-y-4">
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h2 className="text-lg font-semibold text-gray-800">Welcome, {user.name}!</h2>
+          <p className="text-sm text-gray-500">{user.role}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-green-100 p-4 rounded-lg text-center">
+            <p className="text-2xl font-bold text-green-700">{activeContracts.length}</p>
+            <p className="text-xs text-green-600">Active Contracts</p>
+          </div>
+          <div className="bg-blue-100 p-4 rounded-lg text-center">
+            <p className="text-2xl font-bold text-blue-700">{completedContracts.length}</p>
+            <p className="text-xs text-blue-600">Completed</p>
+          </div>
+        </div>
+        {isFarmer && (
+          <div className="bg-white p-4 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold text-gray-800">My Produce</h3>
+              <button onClick={() => navigate('/produce/new')} className="text-sm text-green-600 font-semibold flex items-center gap-1">
+                <PlusIcon className="w-4 h-4" /> Add
+              </button>
+            </div>
+            {myProduce.length > 0 ? (
+              <div className="space-y-2">
+                {myProduce.slice(0, 3).map(p => (
+                  <div key={p.id} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-700">{p.name}</span>
+                    <span className="text-green-600 font-semibold">KES {p.pricePerKg}/kg</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">No produce listed yet.</p>
+            )}
+          </div>
+        )}
+        {isVendor && (
+          <div className="bg-white p-4 rounded-lg shadow-md">
+            <h3 className="font-semibold text-gray-800 mb-2">Browse Produce</h3>
+            <button onClick={() => navigate('/produce')} className="w-full bg-green-600 text-white py-2 rounded-lg text-sm font-semibold">
+              View All Produce
+            </button>
+          </div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+// --- Produce List Screen --- //
+const ProduceListScreen = () => {
+  const { user } = useAuth();
+  const { produce } = useData();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  if (!user) return null;
+
+  const isFarmer = user.role === UserRole.FARMER;
+  const filtered = produce.filter(p => 
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.type.toLowerCase().includes(search.toLowerCase()) ||
+    p.location.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <Layout>
+      <Header title="Produce" />
+      <div className="p-4 space-y-4">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Search produce..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+          {isFarmer && (
+            <button onClick={() => navigate('/produce/new')} className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-1">
+              <PlusIcon className="w-4 h-4" /> Add
+            </button>
+          )}
+        </div>
+        {filtered.length > 0 ? (
+          <div className="space-y-4">
+            {filtered.map(p => <ProduceCard key={p.id} produce={p} />)}
+          </div>
+        ) : (
+          <div className="text-center text-gray-500 mt-16">No produce found.</div>
+        )}
+      </div>
+    </Layout>
+  );
+};
+
+// --- Add Produce Screen --- //
+const AddProduceScreen = () => {
+  const { user } = useAuth();
+  const { addProduce } = useData();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ name: '', type: '', quantity: '', pricePerKg: '', location: '', description: '', harvestDate: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  if (!user) return null;
+
+  const change = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name || !form.type || !form.quantity || !form.pricePerKg || !form.location) {
+      setError('Please fill all required fields');
+      return;
+    }
+    setSaving(true);
+    try {
+      await addProduce({
+        id: '',
+        farmerId: user.id,
+        farmerName: user.name,
+        name: form.name,
+        type: form.type,
+        quantity: parseFloat(form.quantity),
+        pricePerKg: parseFloat(form.pricePerKg),
+        location: form.location,
+        description: form.description,
+        harvestDate: form.harvestDate || new Date().toISOString().split('T')[0],
+        imageUrl: 'https://images.unsplash.com/photo-1518843875459-f738682238a6?w=400',
+      });
+      navigate('/produce');
+    } catch (err: any) {
+      setError(err.message || 'Failed to add produce');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Layout showNav={false}>
+      <Header title="Add Produce" showBack />
+      <div className="p-4">
+        <form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <InputField label="Name *" name="name" value={form.name} onChange={change} placeholder="e.g. Tomatoes" />
+          <InputField label="Type *" name="type" value={form.type} onChange={change} placeholder="e.g. Vegetables" />
+          <InputField label="Quantity (kg) *" name="quantity" type="number" value={form.quantity} onChange={change} placeholder="e.g. 100" />
+          <InputField label="Price per kg (KES) *" name="pricePerKg" type="number" value={form.pricePerKg} onChange={change} placeholder="e.g. 50" />
+          <InputField label="Location *" name="location" value={form.location} onChange={change} placeholder="e.g. Nairobi" />
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea name="description" value={form.description} onChange={change} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm" />
+          </div>
+          <InputField label="Harvest Date" name="harvestDate" type="date" value={form.harvestDate} onChange={change} />
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">
+            {saving ? 'Saving...' : 'Add Produce'}
+          </button>
+        </form>
+      </div>
+    </Layout>
+  );
+};
+
+// --- Offer Flow Screen (placeholder) --- //
+const OfferFlowScreen = () => {
+  const navigate = useNavigate();
+  return (
+    <Layout showNav={false}>
+      <Header title="Make Offer" showBack />
+      <div className="p-4 text-center text-gray-500">
+        <p>Use the New Contract flow instead.</p>
+        <button onClick={() => navigate(-1)} className="mt-4 text-green-600 font-semibold">Go Back</button>
+      </div>
+    </Layout>
+  );
+};
+
+// --- New Contract Screen (Vendor creates offer) --- //
+const NewContractScreen = () => {
+  const { user } = useAuth();
+  const { produce, users, proposeContract } = useData();
+  const { produceId } = useParams();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ quantity: '', deadline: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  if (!user) return null;
+
+  const selectedProduce = produce.find(p => p.id === produceId);
+  if (!selectedProduce) return <Layout showNav={false}><Header title="New Contract" showBack /><div className="p-4">Produce not found</div></Layout>;
+
+  const farmer = users.find(u => u.id === selectedProduce.farmerId);
+  const totalPrice = parseFloat(form.quantity || '0') * selectedProduce.pricePerKg;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!form.quantity || !form.deadline) {
+      setError('Please fill all fields');
+      return;
+    }
+    if (parseFloat(form.quantity) > selectedProduce.quantity) {
+      setError('Quantity exceeds available stock');
+      return;
+    }
+    setSaving(true);
+    try {
+      await proposeContract({
+        id: '',
+        produceId: selectedProduce.id,
+        produceName: selectedProduce.name,
+        farmerId: selectedProduce.farmerId,
+        vendorId: user.id,
+        farmerName: farmer?.name || 'Unknown',
+        vendorName: user.name,
+        quantity: parseFloat(form.quantity),
+        totalPrice,
+        deliveryDeadline: form.deadline,
+        status: ContractStatus.PENDING,
+      });
+      navigate('/contracts');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create contract');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Layout showNav={false}>
+      <Header title="New Contract" showBack />
+      <div className="p-4 space-y-4">
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h3 className="font-bold text-gray-800">{selectedProduce.name}</h3>
+          <p className="text-sm text-gray-500">By {selectedProduce.farmerName}</p>
+          <p className="text-sm text-gray-500">Available: {selectedProduce.quantity} kg @ KES {selectedProduce.pricePerKg}/kg</p>
+        </div>
+        <form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <InputField label="Quantity (kg)" name="quantity" type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="How much?" />
+          <InputField label="Delivery Deadline" name="deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} />
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-600">Total Price: <span className="font-bold text-green-600">KES {totalPrice.toLocaleString()}</span></p>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={saving} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300">
+            {saving ? 'Submitting...' : 'Submit Offer'}
+          </button>
+        </form>
+      </div>
+    </Layout>
+  );
+};
+
+// --- Farmer New Contract Screen (Farmer creates contract) --- //
+const FarmerNewContractScreen = () => {
+  const { user } = useAuth();
+  const { produce, users, addContract } = useData();
+  const { produceId } = useParams();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ vendorId: '', quantity: '', deadline: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  if (!user) return null;
+
+  const selectedProduce = produce.find(p => p.id === produceId);
+  if (!selectedProduce) return <Layout showNav={false}><Header title="Create Contract" showBack /><div className="p-4">Produce not found</div></Layout>;
+
+  const vendors = users.filter(u => u.role === UserRole.VENDOR);
+  const selectedVendor = vendors.find(v => v.id === form.vendorId);
+  const totalPrice = parseFloat(form.quantity || '0') * selectedProduce.pricePerKg;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!form.vendorId || !form.quantity || !form.deadline) {
+      setError('Please fill all fields');
+      return;
+    }
+    if (parseFloat(form.quantity) > selectedProduce.quantity) {
+      setError('Quantity exceeds available stock');
+      return;
+    }
+    setSaving(true);
+    try {
+      await addContract({
+        id: '',
+        produceId: selectedProduce.id,
+        produceName: selectedProduce.name,
+        farmerId: user.id,
+        vendorId: form.vendorId,
+        farmerName: user.name,
+        vendorName: selectedVendor?.name || 'Unknown',
+        quantity: parseFloat(form.quantity),
+        totalPrice,
+        deliveryDeadline: form.deadline,
+        status: ContractStatus.ACTIVE,
+      });
+      navigate('/contracts');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create contract');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Layout showNav={false}>
+      <Header title="Create Contract" showBack />
+      <div className="p-4 space-y-4">
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h3 className="font-bold text-gray-800">{selectedProduce.name}</h3>
+          <p className="text-sm text-gray-500">Available: {selectedProduce.quantity} kg @ KES {selectedProduce.pricePerKg}/kg</p>
+        </div>
+        <form onSubmit={submit} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Select Vendor</label>
+            <select
+              value={form.vendorId}
+              onChange={e => setForm({ ...form, vendorId: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+            >
+              <option value="">Choose a vendor...</option>
+              {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
+          <InputField label="Quantity (kg)" name="quantity" type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="How much?" />
+          <InputField label="Delivery Deadline" name="deadline" type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} />
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-600">Total Price: <span className="font-bold text-green-600">KES {totalPrice.toLocaleString()}</span></p>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={saving} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300">
+            {saving ? 'Creating...' : 'Create Contract'}
+          </button>
+        </form>
+      </div>
+    </Layout>
+  );
+};
+
+// --- Wallet Screen --- //
+const WalletScreen = () => {
+  const { user } = useAuth();
+  const { transactions } = useData();
+  if (!user) return null;
+
+  const myTransactions = transactions.filter(t => t.userId === user.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return (
+    <Layout>
+      <Header title="Wallet" />
+      <div className="p-4 space-y-4">
+        <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-lg text-white">
+          <p className="text-sm opacity-80">Balance</p>
+          <p className="text-3xl font-bold">KES {(user.walletBalance || 0).toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h3 className="font-semibold text-gray-800 mb-3">Recent Transactions</h3>
+          {myTransactions.length > 0 ? (
+            <div className="space-y-3">
+              {myTransactions.slice(0, 10).map(t => (
+                <div key={t.id} className="flex justify-between items-center text-sm border-b pb-2">
+                  <div>
+                    <p className="text-gray-700">{t.description}</p>
+                    <p className="text-xs text-gray-400">{new Date(t.date).toLocaleDateString()}</p>
+                  </div>
+                  <span className={`font-semibold ${t.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {t.amount >= 0 ? '+' : ''}{t.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">No transactions yet.</p>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+// --- Market Insights Screen --- //
+const MarketInsightsScreen = () => {
+  const { produce, contracts } = useData();
+
+  const totalProduce = produce.length;
+  const totalContracts = contracts.length;
+  const completedContracts = contracts.filter(c => c.status === ContractStatus.COMPLETED).length;
+  const totalVolume = contracts.reduce((sum, c) => sum + c.totalPrice, 0);
+
+  const produceTypes = produce.reduce((acc, p) => {
+    acc[p.type] = (acc[p.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return (
+    <Layout>
+      <Header title="Market Insights" />
+      <div className="p-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white p-4 rounded-lg shadow-md text-center">
+            <p className="text-2xl font-bold text-green-600">{totalProduce}</p>
+            <p className="text-xs text-gray-500">Total Produce</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-md text-center">
+            <p className="text-2xl font-bold text-blue-600">{totalContracts}</p>
+            <p className="text-xs text-gray-500">Total Contracts</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-md text-center">
+            <p className="text-2xl font-bold text-purple-600">{completedContracts}</p>
+            <p className="text-xs text-gray-500">Completed</p>
+          </div>
+          <div className="bg-white p-4 rounded-lg shadow-md text-center">
+            <p className="text-2xl font-bold text-amber-600">KES {(totalVolume / 1000).toFixed(0)}K</p>
+            <p className="text-xs text-gray-500">Total Volume</p>
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <h3 className="font-semibold text-gray-800 mb-3">Produce by Type</h3>
+          <div className="space-y-2">
+            {Object.entries(produceTypes).map(([type, count]) => (
+              <div key={type} className="flex justify-between text-sm">
+                <span className="text-gray-700">{type}</span>
+                <span className="font-semibold text-gray-800">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+// --- Profile Screen --- //
+const ProfileScreen = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  if (!user) return null;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
+  return (
+    <Layout>
+      <Header title="Profile" />
+      <div className="p-4 space-y-4">
+        <div className="bg-white p-6 rounded-lg shadow-md text-center">
+          <div className="w-20 h-20 bg-green-100 rounded-full mx-auto flex items-center justify-center">
+            <UserIcon className="w-10 h-10 text-green-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mt-4">{user.name}</h2>
+          <p className="text-sm text-gray-500">{user.email}</p>
+          <span className={`inline-block mt-2 px-3 py-1 text-xs font-semibold rounded-full ${user.role === UserRole.FARMER ? 'bg-green-100 text-green-700' : user.role === UserRole.VENDOR ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'}`}>
+            {user.role}
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-lg shadow-md space-y-3">
+          {user.location && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Location</span>
+              <span className="text-gray-800">{user.location}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Rating</span>
+            <div className="flex items-center gap-1">
+              <StarIcon className="w-4 h-4 text-yellow-500" />
+              <span className="text-gray-800">{user.rating?.toFixed(1) || 'N/A'}</span>
+            </div>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Reviews</span>
+            <span className="text-gray-800">{user.reviews || 0}</span>
+          </div>
+        </div>
+        <button onClick={handleLogout} className="w-full bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600">
+          Logout
+        </button>
+      </div>
+    </Layout>
   );
 };
 
