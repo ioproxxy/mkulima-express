@@ -212,29 +212,56 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const profile = await api.fetchUserProfile(session.user.id);
-        if (profile) {
-            setUser(profile);
-        } else {
-            // Logged in but no profile, handled in UI or error
-            console.error("User authenticated but no profile found.");
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+                console.warn("Session check error:", error.message);
+                // If the refresh token is missing or invalid, we must clear the local session
+                if (error.message.includes("Refresh Token") || error.message.includes("Invalid Refresh Token")) {
+                    await supabase.auth.signOut();
+                }
+                setUser(null);
+                setLoading(false);
+                return;
+            }
+
+            if (session?.user) {
+                const profile = await api.fetchUserProfile(session.user.id);
+                if (profile) {
+                    setUser(profile);
+                } else {
+                    console.error("User authenticated but no profile found.");
+                    setUser(null); 
+                }
+            } else {
+                setUser(null);
+            }
+        } catch (err) {
+            console.error("Unexpected auth error:", err);
+            setUser(null);
+        } finally {
+            setLoading(false);
         }
-      }
-      setLoading(false);
     };
 
     checkUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-         const profile = await api.fetchUserProfile(session.user.id);
-         setUser(profile);
-      } else {
-         setUser(null);
-      }
-      setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        // Handle explicit sign-out or session expiration events
+        if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setLoading(false);
+            return;
+        }
+
+        if (session?.user) {
+            const profile = await api.fetchUserProfile(session.user.id);
+            setUser(profile);
+        } else {
+            setUser(null);
+        }
+        setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -499,7 +526,7 @@ const MapView: React.FC<{ users: User[]; currentUserId?: string }> = ({ users, c
                         style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -100%)' }}
                     >
                         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {user.name} {isCurrentUser && '(You)'} <br/> ({user.location.split(',')[0]})
+                          {user.name} {isCurrentUser && '(You)'} <br/> ({(user.location || '').split(',')[0]})
                         </div>
                         <MapPinIcon className={`w-8 h-8 ${isCurrentUser ? 'text-blue-500' : isFarmer ? 'text-green-600' : 'text-amber-500'} drop-shadow-lg`} />
                     </div>
@@ -1031,7 +1058,7 @@ const DashboardScreen = () => {
   const activeContracts = relevantContracts.filter(c => c.status === ContractStatus.ACTIVE || c.status === ContractStatus.DELIVERY_CONFIRMED);
   const myProduce = produce.filter(p => p.farmerId === user.id);
   
-  const greeting = `Good afternoon, ${user.name.split(' ')[0]}!`;
+  const greeting = `Good afternoon, ${(user.name || '').split(' ')[0]}!`;
 
   return (
     <Layout>
@@ -1170,6 +1197,7 @@ const AddProduceScreen = () => {
     const navigate = useNavigate();
     const { notify } = useNotifier();
 
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         type: 'Vegetable',
@@ -1183,30 +1211,39 @@ const AddProduceScreen = () => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !formData.name || !formData.quantity || !formData.pricePerKg || !formData.harvestDate) {
             notify("Please fill all required fields.", "warning");
             return;
         }
 
-        const newProduce: Produce = {
-            id: self.crypto.randomUUID(),
-            farmerId: user.id,
-            farmerName: user.name,
-            name: formData.name,
-            type: formData.type,
-            quantity: parseInt(formData.quantity, 10),
-            pricePerKg: parseInt(formData.pricePerKg, 10),
-            location: user.location,
-            imageUrl: `https://picsum.photos/seed/${formData.name.replace(/\s/g, '')}/400/300`,
-            description: formData.description,
-            harvestDate: formData.harvestDate,
-        };
+        setIsSubmitting(true);
+        try {
+            const newProduce: Produce = {
+                id: self.crypto.randomUUID(),
+                farmerId: user.id,
+                farmerName: user.name,
+                name: formData.name,
+                type: formData.type,
+                quantity: parseFloat(formData.quantity),
+                pricePerKg: parseFloat(formData.pricePerKg),
+                location: user.location,
+                imageUrl: `https://picsum.photos/seed/${formData.name.replace(/\s/g, '')}/400/300`,
+                description: formData.description,
+                harvestDate: formData.harvestDate,
+            };
 
-        addProduce(newProduce);
-        notify("Produce listed successfully!", "success");
-        navigate('/my-produce');
+            await addProduce(newProduce);
+            notify("Produce listed successfully!", "success");
+            navigate('/my-produce');
+        } catch (error: any) {
+            console.error("Error adding produce:", error);
+            const errorMsg = error.message ? error.message : JSON.stringify(error);
+            notify(`Failed to add produce: ${errorMsg}`, "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -1224,15 +1261,19 @@ const AddProduceScreen = () => {
                             <option>Other</option>
                         </select>
                     </div>
-                    <InputField label="Quantity (kg)" name="quantity" type="number" value={formData.quantity} onChange={handleChange} min="1" />
-                    <InputField label="Price per Kg (KES)" name="pricePerKg" type="number" value={formData.pricePerKg} onChange={handleChange} min="1" />
+                    <InputField label="Quantity (kg)" name="quantity" type="number" value={formData.quantity} onChange={handleChange} min="1" step="0.1" />
+                    <InputField label="Price per Kg (KES)" name="pricePerKg" type="number" value={formData.pricePerKg} onChange={handleChange} min="1" step="0.01" />
                     <InputField label="Harvest Date" name="harvestDate" type="date" value={formData.harvestDate} onChange={handleChange} />
                     <div>
                         <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                         <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Organically grown, sweet and juicy."></textarea>
                     </div>
-                    <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
-                        Add to My Listings
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className={`w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isSubmitting ? 'Adding Produce...' : 'Add to My Listings'}
                     </button>
                 </form>
             </div>
@@ -1605,7 +1646,7 @@ const NewContractScreen = () => {
 
     const selectedProduce = produce.find(p => p.id === produceId);
     const [quantity, setQuantity] = useState(1);
-    const [deadline, setDeadline] = useState('');
+    const [deadline, setDeadline] = useState(new Date().toISOString().split("T")[0]);
     
     if (!selectedProduce || !user) {
         return <Navigate to="/produce" replace />;
@@ -1706,7 +1747,7 @@ const FarmerNewContractScreen = () => {
 
     const [vendorId, setVendorId] = useState('');
     const [quantity, setQuantity] = useState(1);
-    const [deadline, setDeadline] = useState('');
+    const [deadline, setDeadline] = useState(new Date().toISOString().split("T")[0]);
 
     const vendors = users.filter(u => u.role === UserRole.VENDOR);
 

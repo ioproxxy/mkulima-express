@@ -30,14 +30,14 @@ const mapUserToDB = (u: User) => ({
 
 const mapUserFromDB = (data: any): User => ({
     id: data.id,
-    name: data.name,
-    email: data.email,
-    role: data.role,
-    rating: data.rating,
-    reviews: data.reviews,
-    location: data.location,
-    avatarUrl: data.avatar_url,
-    walletBalance: data.wallet_balance,
+    name: data.name || '',
+    email: data.email || '',
+    role: data.role || 'FARMER',
+    rating: data.rating || 0,
+    reviews: data.reviews || 0,
+    location: data.location || '',
+    avatarUrl: data.avatar_url || '',
+    walletBalance: data.wallet_balance || 0,
     lat: data.lat,
     lng: data.lng,
     farmSize: data.farm_size,
@@ -62,14 +62,14 @@ const mapProduceToDB = (p: Produce) => ({
 const mapProduceFromDB = (data: any): Produce => ({
     id: data.id,
     farmerId: data.farmer_id,
-    farmerName: data.farmer_name,
-    name: data.name,
-    type: data.type,
-    quantity: data.quantity,
-    pricePerKg: data.price_per_kg,
-    location: data.location,
-    imageUrl: data.image_url,
-    description: data.description,
+    farmerName: data.farmer_name || '',
+    name: data.name || '',
+    type: data.type || '',
+    quantity: data.quantity || 0,
+    pricePerKg: data.price_per_kg || 0,
+    location: data.location || '',
+    imageUrl: data.image_url || '',
+    description: data.description || '',
     harvestDate: data.harvest_date
 });
 
@@ -104,13 +104,13 @@ const mapContractToDB = (c: Contract) => {
 const mapContractFromDB = (data: any): Contract => ({
     id: data.id,
     produceId: data.produce_id,
-    produceName: data.produce_name,
+    produceName: data.produce_name || '',
     farmerId: data.farmer_id,
     vendorId: data.vendor_id,
-    farmerName: data.farmer_name,
-    vendorName: data.vendor_name,
-    quantity: data.quantity,
-    totalPrice: data.total_price,
+    farmerName: data.farmer_name || '',
+    vendorName: data.vendor_name || '',
+    quantity: data.quantity || 0,
+    totalPrice: data.total_price || 0,
     deliveryDeadline: data.delivery_deadline,
     paymentDate: data.payment_date,
     status: data.status,
@@ -137,7 +137,7 @@ const mapTransactionFromDB = (data: any): Transaction => ({
     userId: data.user_id,
     type: data.type,
     amount: data.amount,
-    description: data.description,
+    description: data.description || '',
     date: data.date,
     relatedContractId: undefined 
 });
@@ -156,8 +156,8 @@ const mapMessageFromDB = (data: any): Message => ({
     id: data.id,
     contractId: data.contract_id,
     senderId: data.sender_id,
-    senderName: data.sender_name,
-    text: data.text,
+    senderName: data.sender_name || '',
+    text: data.text || '',
     timestamp: data.timestamp
 });
 
@@ -219,6 +219,7 @@ export const updateUser = async (updatedUser: User): Promise<User> => {
 
 export const addUser = async (newUser: User): Promise<User> => {
     try {
+        // We MUST keep the ID for users as it matches Auth ID
         const dbUser = mapUserToDB(newUser);
         const { data, error } = await supabase
             .from('users')
@@ -259,10 +260,22 @@ export const fetchProduce = async (): Promise<Produce[]> => {
 
 export const addProduce = async (newProduce: Produce): Promise<Produce> => {
     try {
+        // Enforce that the user is authenticated and matches the farmer_id
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User must be authenticated to add produce");
+
         const dbProduce = mapProduceToDB(newProduce);
+        
+        // Strictly override farmer_id with the authenticated user's ID
+        // This prevents RLS violations if the app state is slightly out of sync
+        dbProduce.farmer_id = user.id;
+
+        // Exclude 'id' to let DB generate it via default uuid_generate_v4()
+        const { id, ...produceData } = dbProduce;
+
         const { data, error } = await supabase
             .from('produce')
-            .insert(dbProduce)
+            .insert(produceData)
             .select()
             .single();
 
@@ -319,10 +332,11 @@ export const updateContract = async (updatedContract: Contract): Promise<Contrac
 
 export const addContract = async (newContract: Contract): Promise<Contract> => {
     try {
-        const dbContract = mapContractToDB(newContract);
+        // Exclude 'id' to let DB generate it via default uuid_generate_v4()
+        const { id, ...contractData } = mapContractToDB(newContract);
         const { data, error } = await supabase
             .from('contracts')
-            .insert(dbContract)
+            .insert(contractData)
             .select()
             .single();
 
@@ -358,10 +372,11 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
 
 export const addTransaction = async (newTransaction: Transaction): Promise<Transaction> => {
     try {
-        const dbTransaction = mapTransactionToDB(newTransaction);
+        // Exclude 'id' to let DB generate it via default uuid_generate_v4()
+        const { id, ...transactionData } = mapTransactionToDB(newTransaction);
         const { data, error } = await supabase
             .from('transactions')
-            .insert(dbTransaction)
+            .insert(transactionData)
             .select()
             .single();
 
@@ -397,10 +412,20 @@ export const fetchMessages = async (): Promise<Message[]> => {
 
 export const addMessage = async (newMessage: Message): Promise<Message> => {
     try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User must be authenticated to send messages");
+
+         // Exclude 'id' to let DB generate it via default uuid_generate_v4()
         const dbMessage = mapMessageToDB(newMessage);
+        
+        // Strictly override sender_id
+        dbMessage.sender_id = user.id;
+        
+        const { id, ...messageData } = dbMessage;
+
         const { data, error } = await supabase
             .from('messages')
-            .insert(dbMessage)
+            .insert(messageData)
             .select()
             .single();
 
