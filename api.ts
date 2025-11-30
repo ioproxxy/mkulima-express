@@ -1,6 +1,6 @@
+
 import { supabase } from './supabaseClient';
 import { User, Produce, Contract, Transaction, Message } from './types';
-import { mockUsers, mockProduce, mockContracts, mockTransactions, mockMessages } from './constants';
 
 // --- SUPABASE API --- //
 
@@ -97,7 +97,7 @@ const mapContractToDB = (c: Contract) => {
         status_history: c.statusHistory,
         dispute_reason: c.disputeReason,
         dispute_filed_by: c.disputeFiledBy,
-        logistics: logisticsPayload, // Store createdBy here
+        logistics: logisticsPayload, 
     };
 };
 
@@ -130,7 +130,6 @@ const mapTransactionToDB = (t: Transaction) => ({
     amount: t.amount,
     description: t.description,
     date: t.date,
-    // related_contract_id: t.relatedContractId // Schema does not have this column, removing to prevent error
 });
 
 const mapTransactionFromDB = (data: any): Transaction => ({
@@ -140,7 +139,7 @@ const mapTransactionFromDB = (data: any): Transaction => ({
     amount: data.amount,
     description: data.description,
     date: data.date,
-    relatedContractId: undefined // Not available in this schema
+    relatedContractId: undefined 
 });
 
 // Message Mappers
@@ -169,12 +168,31 @@ export const fetchUsers = async (): Promise<User[]> => {
         const { data, error } = await supabase.from('users').select('*');
         if (error) {
             logError('fetchUsers', error);
-            return Object.values(mockUsers);
+            return [];
         }
         return (data || []).map(mapUserFromDB);
     } catch (err) {
         logError('fetchUsers', err);
-        return Object.values(mockUsers);
+        return [];
+    }
+};
+
+export const fetchUserProfile = async (userId: string): Promise<User | null> => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+            
+        if (error) {
+            logError('fetchUserProfile', error);
+            return null;
+        }
+        return mapUserFromDB(data);
+    } catch (err) {
+        logError('fetchUserProfile', err);
+        return null;
     }
 };
 
@@ -190,12 +208,12 @@ export const updateUser = async (updatedUser: User): Promise<User> => {
         
         if (error) {
             logError('updateUser', error);
-            return updatedUser; // Fallback
+            throw error;
         }
         return mapUserFromDB(data);
     } catch (err) {
         logError('updateUser', err);
-        return updatedUser;
+        throw err;
     }
 };
 
@@ -210,12 +228,12 @@ export const addUser = async (newUser: User): Promise<User> => {
 
         if (error) {
             logError('addUser', error);
-            return newUser; // Fallback
+            throw error;
         }
         return mapUserFromDB(data);
     } catch (err) {
         logError('addUser', err);
-        return newUser;
+        throw err;
     }
 };
 
@@ -230,12 +248,12 @@ export const fetchProduce = async (): Promise<Produce[]> => {
         
         if (error) {
             logError('fetchProduce', error);
-            return mockProduce;
+            return [];
         }
         return (data || []).map(mapProduceFromDB);
     } catch (err) {
         logError('fetchProduce', err);
-        return mockProduce;
+        return [];
     }
 };
 
@@ -250,12 +268,12 @@ export const addProduce = async (newProduce: Produce): Promise<Produce> => {
 
         if (error) {
             logError('addProduce', error);
-            return newProduce; // Fallback
+            throw error;
         }
         return mapProduceFromDB(data);
     } catch (err) {
         logError('addProduce', err);
-        return newProduce;
+        throw err;
     }
 }
 
@@ -269,12 +287,12 @@ export const fetchContracts = async (): Promise<Contract[]> => {
         
         if (error) {
             logError('fetchContracts', error);
-            return mockContracts;
+            return [];
         }
         return (data || []).map(mapContractFromDB);
     } catch (err) {
         logError('fetchContracts', err);
-        return mockContracts;
+        return [];
     }
 };
 
@@ -290,12 +308,12 @@ export const updateContract = async (updatedContract: Contract): Promise<Contrac
 
         if (error) {
             logError('updateContract', error);
-            return updatedContract; // Fallback
+            throw error;
         }
         return mapContractFromDB(data);
     } catch (err) {
         logError('updateContract', err);
-        return updatedContract;
+        throw err;
     }
 };
 
@@ -310,12 +328,12 @@ export const addContract = async (newContract: Contract): Promise<Contract> => {
 
         if (error) {
             logError('addContract', error);
-            return newContract; // Fallback
+            throw error;
         }
         return mapContractFromDB(data);
     } catch (err) {
         logError('addContract', err);
-        return newContract;
+        throw err;
     }
 };
 
@@ -329,12 +347,12 @@ export const fetchTransactions = async (): Promise<Transaction[]> => {
 
         if (error) {
             logError('fetchTransactions', error);
-            return mockTransactions;
+            return [];
         }
         return (data || []).map(mapTransactionFromDB);
     } catch (err) {
         logError('fetchTransactions', err);
-        return mockTransactions;
+        return [];
     }
 };
 
@@ -349,12 +367,12 @@ export const addTransaction = async (newTransaction: Transaction): Promise<Trans
 
         if (error) {
             logError('addTransaction', error);
-            return newTransaction; // Fallback
+            throw error;
         }
         return mapTransactionFromDB(data);
     } catch (err) {
         logError('addTransaction', err);
-        return newTransaction;
+        throw err;
     }
 };
 
@@ -368,12 +386,12 @@ export const fetchMessages = async (): Promise<Message[]> => {
 
         if (error) {
             logError('fetchMessages', error);
-            return mockMessages;
+            return [];
         }
         return (data || []).map(mapMessageFromDB);
     } catch (err) {
         logError('fetchMessages', err);
-        return mockMessages;
+        return [];
     }
 };
 
@@ -388,11 +406,11 @@ export const addMessage = async (newMessage: Message): Promise<Message> => {
 
         if (error) {
             logError('addMessage', error);
-            return newMessage; // Fallback
+            throw error;
         }
         return mapMessageFromDB(data);
     } catch (err) {
         logError('addMessage', err);
-        return newMessage;
+        throw err;
     }
 };

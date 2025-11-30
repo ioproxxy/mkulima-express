@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum UserRole {
@@ -37,13 +38,13 @@ export interface Produce {
 }
 
 export enum ContractStatus {
-  PENDING = 'Pending',
-  ACTIVE = 'Active',
-  DELIVERY_CONFIRMED = 'Delivery Confirmed',
-  PAYMENT_RELEASED = 'Payment Released',
-  COMPLETED = 'Completed',
-  DISPUTED = 'Disputed',
-  CANCELLED = 'Cancelled',
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  DELIVERY_CONFIRMED = 'DELIVERY_CONFIRMED',
+  PAYMENT_RELEASED = 'PAYMENT_RELEASED',
+  COMPLETED = 'COMPLETED',
+  DISPUTED = 'DISPUTED',
+  CANCELLED = 'CANCELLED',
 }
 
 export interface Logistics {
@@ -72,6 +73,7 @@ export interface Contract {
   disputeReason?: string;
   disputeFiledBy?: string;
   logistics?: Logistics;
+  createdBy: string;
 }
 
 export interface Message {
