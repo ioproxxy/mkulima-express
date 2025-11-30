@@ -1,8 +1,10 @@
+
 import React, { useState, useContext, createContext, useMemo, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
 import { User, UserRole, Produce, Contract, ContractStatus, Transaction, TransactionType, Message, Logistics } from './types';
 import * as api from './api';
+import { supabase } from './supabaseClient';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -94,6 +96,7 @@ interface DataContextType {
   addUser: (newUser: User) => Promise<User>;
   addTransaction: (newTransaction: Transaction) => Promise<void>;
   addMessage: (newMessage: Message) => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -106,28 +109,29 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [usersData, contractsData, produceData, transactionsData, messagesData] = await Promise.all([
+        api.fetchUsers(),
+        api.fetchContracts(),
+        api.fetchProduce(),
+        api.fetchTransactions(),
+        api.fetchMessages(),
+      ]);
+      setUsers(usersData);
+      setContracts(contractsData);
+      setProduce(produceData);
+      setTransactions(transactionsData);
+      setMessages(messagesData);
+    } catch (error) {
+      console.error("Failed to load app data", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [usersData, contractsData, produceData, transactionsData, messagesData] = await Promise.all([
-          api.fetchUsers(),
-          api.fetchContracts(),
-          api.fetchProduce(),
-          api.fetchTransactions(),
-          api.fetchMessages(),
-        ]);
-        setUsers(usersData);
-        setContracts(contractsData);
-        setProduce(produceData);
-        setTransactions(transactionsData);
-        setMessages(messagesData);
-      } catch (error) {
-        console.error("Failed to load app data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadData();
   }, []);
 
@@ -169,7 +173,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   const value = useMemo(() => ({
     users, produce, contracts, transactions, messages, loading,
-    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, addMessage
+    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, addMessage, refreshData: loadData
   }), [users, produce, contracts, transactions, messages, loading]);
 
   return (
@@ -188,48 +192,117 @@ const useData = () => {
 };
 
 // --- AUTHENTICATION CONTEXT --- //
-type UserRegistrationData = Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'>;
+type UserRegistrationData = Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'> & { password?: string };
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => boolean;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   register: (userData: UserRegistrationData) => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const { users, addUser } = useData();
+  const [loading, setLoading] = useState(true);
+  const { addUser, refreshData } = useData();
+  const { notify } = useNotifier();
 
-  const login = (email: string, password: string): boolean => {
-    const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (foundUser) {
-        setUser(foundUser);
-        return true;
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await api.fetchUserProfile(session.user.id);
+        if (profile) {
+            setUser(profile);
+        } else {
+            // Logged in but no profile, handled in UI or error
+            console.error("User authenticated but no profile found.");
+        }
+      }
+      setLoading(false);
+    };
+
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+         const profile = await api.fetchUserProfile(session.user.id);
+         setUser(profile);
+      } else {
+         setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+        setLoading(false);
+        console.error("Login Error:", error.message);
+        return false;
     }
-    return false;
+    await refreshData();
+    // User state will be updated by onAuthStateChange
+    return true;
   };
 
   const register = async (userData: UserRegistrationData) => {
-    const newUser: User = {
-      ...userData,
-      id: self.crypto.randomUUID(),
-      rating: 0,
-      reviews: 0,
-      avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
-      walletBalance: 0,
-    };
-    const addedUser = await addUser(newUser);
-    setUser(addedUser);
+    if (!userData.password) {
+        throw new Error("Password is required for registration");
+    }
+    
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+    });
+
+    if (error) {
+        setLoading(false);
+        console.error("Registration Error:", error.message);
+        throw error;
+    }
+
+    if (data.user) {
+        const newUser: User = {
+            id: data.user.id, // Use the Auth ID
+            name: userData.name,
+            email: userData.email,
+            role: userData.role,
+            location: userData.location,
+            farmSize: userData.farmSize,
+            businessName: userData.businessName,
+            rating: 0,
+            reviews: 0,
+            avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
+            walletBalance: 0,
+        };
+        
+        try {
+            await addUser(newUser);
+            // Wait for profile propagation
+            await refreshData();
+        } catch (dbError) {
+             console.error("Database Insert Error:", dbError);
+             // Optional: cleanup auth user if DB insert fails
+        }
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
+    notify("Logged out successfully", "info");
   };
 
-  const value = useMemo(() => ({ user, login, logout, register }), [user, users]);
+  const value = useMemo(() => ({ user, login, logout, register, loading }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
@@ -274,8 +347,10 @@ const useNotifier = () => {
 
 // --- ROUTING --- //
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) return <div className="p-4 text-center">Loading authentication...</div>;
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -489,37 +564,22 @@ const LoginModal = ({
     onClose: () => void; 
     onLoginSuccess: () => void;
 }) => {
-    const [step, setStep] = useState<'role' | 'form'>('role');
-    const [selectedRole, setSelectedRole] = useState<UserRole.FARMER | UserRole.VENDOR | null>(null);
     const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const roleConfig = {
-        [UserRole.FARMER]: {
-            demoUser: 'juma.mwangi@example.com',
-        },
-        [UserRole.VENDOR]: {
-            demoUser: 'aisha.omar@example.com',
-        },
-    };
-
-    const handleRoleSelect = (role: UserRole.FARMER | UserRole.VENDOR) => {
-        setSelectedRole(role);
-        setEmail(roleConfig[role].demoUser);
-        setStep('form');
-        setError('');
-    };
-
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         if (!email || !password) {
             setError('Please fill in both fields.');
             return;
         }
-        const success = login(email, password);
+        setIsLoading(true);
+        const success = await login(email, password);
+        setIsLoading(false);
         if (success) {
             onLoginSuccess();
         } else {
@@ -542,89 +602,54 @@ const LoginModal = ({
                     <XIcon className="w-6 h-6" />
                 </button>
 
-                {step === 'role' && (
-                    <div className="p-8">
-                        <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Select Your Role</h2>
-                        <div className="space-y-4">
-                            <button
-                                onClick={() => handleRoleSelect(UserRole.FARMER)}
-                                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold text-lg hover:bg-green-700 transition-all duration-300 transform hover:scale-105"
-                            >
-                                I'm a Farmer
-                            </button>
-                            <button
-                                onClick={() => handleRoleSelect(UserRole.VENDOR)}
-                                className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold text-lg hover:bg-amber-600 transition-all duration-300 transform hover:scale-105"
-                            >
-                                I'm a Vendor
-                            </button>
-                        </div>
-                         <div className="mt-6 text-center">
-                            <p className="text-sm text-gray-600">
-                                Don't have an account?{' '}
-                                <Link to="/onboarding" className="font-semibold text-green-600 hover:text-green-700">
-                                    Sign Up
-                                </Link>
-                            </p>
-                        </div>
-                    </div>
-                )}
-                {step === 'form' && selectedRole && (
-                     <div className="p-8">
-                        <div className="flex items-center mb-6">
-                            <button onClick={() => setStep('role')} className="text-gray-500 hover:text-gray-800">
-                                <ChevronLeftIcon className="w-6 h-6" />
-                            </button>
-                            <h2 className="text-2xl font-bold text-center text-gray-800 flex-grow">
-                                {selectedRole === UserRole.FARMER ? 'Farmer' : 'Vendor'} Login
-                            </h2>
-                        </div>
-                        <form onSubmit={handleLogin} className="space-y-4">
+                <div className="p-8">
+                    <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Welcome Back</h2>
+                    <form onSubmit={handleLogin} className="space-y-4">
+                        <InputField
+                            label="Email Address"
+                            name="email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="you@example.com"
+                        />
+                        <div>
                             <InputField
-                                label="Email Address"
-                                name="email"
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
+                                label="Password"
+                                name="password"
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
                             />
-                            <div>
-                                <InputField
-                                    label="Password"
-                                    name="password"
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                />
-                                 <div className="text-right mt-1">
-                                    <Link 
-                                      to="/forgot-password" 
-                                      onClick={onClose} 
-                                      className="text-sm font-medium text-green-600 hover:text-green-700"
-                                    >
-                                        Forgot Password?
-                                    </Link>
-                                </div>
+                                <div className="text-right mt-1">
+                                <Link 
+                                    to="/forgot-password" 
+                                    onClick={onClose} 
+                                    className="text-sm font-medium text-green-600 hover:text-green-700"
+                                >
+                                    Forgot Password?
+                                </Link>
                             </div>
-                            {error && <p className="text-sm text-red-600 text-center">{error}</p>}
-                            <button
-                                type="submit"
-                                className={`w-full text-white py-3 rounded-lg font-semibold text-lg transition-all duration-300 transform hover:scale-105 ${
-                                    selectedRole === UserRole.FARMER 
-                                    ? 'bg-green-600 hover:bg-green-700' 
-                                    : 'bg-amber-500 hover:bg-amber-600'
-                                }`}
-                            >
-                                Login
-                            </button>
-                        </form>
-                         <div className="mt-6 border-t pt-4 text-sm text-gray-500 text-center">
-                            <p><span className="font-medium">Demo Email:</span> {roleConfig[selectedRole].demoUser}</p>
-                            <p className="mt-1 italic">(Any password will work)</p>
                         </div>
+                        {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className={`w-full text-white py-3 rounded-lg font-semibold text-lg transition-all duration-300 transform hover:scale-105 bg-green-600 hover:bg-green-700 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                        >
+                            {isLoading ? 'Logging in...' : 'Login'}
+                        </button>
+                    </form>
+                    <div className="mt-6 text-center">
+                        <p className="text-sm text-gray-600">
+                            Don't have an account?{' '}
+                            <Link to="/onboarding" onClick={onClose} className="font-semibold text-green-600 hover:text-green-700">
+                                Sign Up
+                            </Link>
+                        </p>
                     </div>
-                )}
+                </div>
             </div>
         </div>
     );
@@ -633,21 +658,23 @@ const LoginModal = ({
 const LoginScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !loading) {
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
     }
-  }, [user, navigate, location]);
+  }, [user, loading, navigate, location]);
 
   const handleLoginSuccess = () => {
       setIsModalOpen(false);
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
   }
+
+  if (loading) return null;
 
   return (
     <>
@@ -665,14 +692,6 @@ const LoginScreen = () => {
             Login or Sign Up
           </button>
       </div>
-       <div className="absolute bottom-4 text-center">
-            <p className="text-sm text-gray-600">
-                Are you an administrator?{' '}
-                <Link to="/admin/login" className="font-semibold text-green-600 hover:text-green-700">
-                    Login here
-                </Link>
-            </p>
-        </div>
     </div>
     {isModalOpen && <LoginModal onClose={() => setIsModalOpen(false)} onLoginSuccess={handleLoginSuccess} />}
     </>
@@ -687,6 +706,7 @@ const AdminLoginScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -695,7 +715,7 @@ const AdminLoginScreen = () => {
         }
     }, [user, navigate, location]);
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
 
@@ -704,20 +724,16 @@ const AdminLoginScreen = () => {
             return;
         }
 
-        const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (foundUser && foundUser.role !== UserRole.ADMIN) {
-             setError('This login is for administrators only.');
-             return;
-        }
-
-        const success = login(email, password);
+        setIsLoading(true);
+        const success = await login(email, password);
+        setIsLoading(false);
 
         if (success) {
-            const from = location.state?.from?.pathname || '/dashboard';
-            navigate(from, { replace: true });
+            // Role check happens after login in AuthContext/useEffect, or here if we wait.
+            // But since login redirects via useEffect above, we might just let it happen.
+            // Ideally we check role BEFORE full redirect, but user is null until auth state changes.
         } else {
-            setError('Invalid administrator credentials.');
+            setError('Invalid credentials.');
         }
     };
 
@@ -749,15 +765,12 @@ const AdminLoginScreen = () => {
                     {error && <p className="text-sm text-red-600 text-center">{error}</p>}
                     <button
                         type="submit"
+                        disabled={isLoading}
                         className="w-full bg-gray-700 text-white py-3 rounded-lg font-semibold text-lg hover:bg-gray-800 transition-colors"
                     >
-                        Login
+                         {isLoading ? 'Logging in...' : 'Login'}
                     </button>
                 </form>
-                 <div className="mt-6 border-t pt-4 text-sm text-gray-500 text-center">
-                    <p><span className="font-medium">Demo Email:</span> admin@mkulima.express</p>
-                    <p className="mt-1 italic">(Any password will work)</p>
-                </div>
                 <div className="mt-6 text-center">
                     <Link to="/login" className="font-semibold text-sm text-green-600 hover:text-green-700">
                        &larr; Back to main site
@@ -773,14 +786,19 @@ const ForgotPasswordScreen = () => {
     const { notify } = useNotifier();
     const [email, setEmail] = useState('');
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!email) {
             notify("Please enter your email address.", "warning");
             return;
         }
-        notify(`If an account exists for ${email}, a password reset link has been sent.`, "success");
-        navigate('/login');
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) {
+             notify("Error sending reset link: " + error.message, "error");
+        } else {
+             notify(`If an account exists for ${email}, a password reset link has been sent.`, "success");
+             navigate('/login');
+        }
     };
 
     return (
@@ -861,8 +879,9 @@ const OnboardingScreen = () => {
 const FarmerRegistrationScreen = () => {
     const { register, user } = useAuth();
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({ name: '', email: '', location: '', farmSize: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', farmSize: '' });
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -876,12 +895,20 @@ const FarmerRegistrationScreen = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name || !formData.email || !formData.location || !formData.farmSize) {
+        setError('');
+        if (!formData.name || !formData.email || !formData.password || !formData.location || !formData.farmSize) {
             setError('All fields are required.');
             return;
         }
-        await register({ ...formData, role: UserRole.FARMER });
-        navigate('/dashboard', { replace: true });
+        setIsSubmitting(true);
+        try {
+            await register({ ...formData, role: UserRole.FARMER });
+            navigate('/dashboard', { replace: true });
+        } catch (err: any) {
+             setError(err.message || 'Registration failed.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -893,14 +920,16 @@ const FarmerRegistrationScreen = () => {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <InputField label="Full Name" name="name" value={formData.name} onChange={handleChange} />
                         <InputField label="Email Address" name="email" type="email" value={formData.email} onChange={handleChange} />
+                        <InputField label="Password" name="password" type="password" value={formData.password} onChange={handleChange} />
                         <InputField label="Location (e.g., Nakuru)" name="location" value={formData.location} onChange={handleChange} />
                         <InputField label="Farm Size (e.g., 10 Acres)" name="farmSize" value={formData.farmSize} onChange={handleChange} />
                         {error && <p className="text-sm text-red-600 text-center">{error}</p>}
                         <button
                             type="submit"
+                            disabled={isSubmitting}
                             className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
                         >
-                            Create Account
+                            {isSubmitting ? 'Creating Account...' : 'Create Account'}
                         </button>
                     </form>
                 </div>
@@ -912,8 +941,9 @@ const FarmerRegistrationScreen = () => {
 const VendorRegistrationScreen = () => {
     const { register, user } = useAuth();
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({ name: '', email: '', location: '', businessName: '' });
+    const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', businessName: '' });
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (user) {
@@ -927,12 +957,20 @@ const VendorRegistrationScreen = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.name || !formData.email || !formData.location || !formData.businessName) {
+        setError('');
+        if (!formData.name || !formData.email || !formData.password || !formData.location || !formData.businessName) {
             setError('All fields are required.');
             return;
         }
-        await register({ ...formData, role: UserRole.VENDOR });
-        navigate('/dashboard', { replace: true });
+        setIsSubmitting(true);
+        try {
+            await register({ ...formData, role: UserRole.VENDOR });
+            navigate('/dashboard', { replace: true });
+        } catch (err: any) {
+            setError(err.message || 'Registration failed.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -944,14 +982,16 @@ const VendorRegistrationScreen = () => {
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <InputField label="Full Name" name="name" value={formData.name} onChange={handleChange} />
                         <InputField label="Email Address" name="email" type="email" value={formData.email} onChange={handleChange} />
+                        <InputField label="Password" name="password" type="password" value={formData.password} onChange={handleChange} />
                         <InputField label="Location (e.g., Nairobi)" name="location" value={formData.location} onChange={handleChange} />
                         <InputField label="Business Name" name="businessName" value={formData.businessName} onChange={handleChange} />
                          {error && <p className="text-sm text-red-600 text-center">{error}</p>}
                         <button
                             type="submit"
+                            disabled={isSubmitting}
                             className="w-full bg-amber-500 text-white py-3 rounded-lg font-semibold hover:bg-amber-600 transition-colors"
                         >
-                            Create Account
+                             {isSubmitting ? 'Creating Account...' : 'Create Account'}
                         </button>
                     </form>
                 </div>
@@ -1017,834 +1057,4 @@ const ProduceScreen = () => {
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('All');
 
-    const produceTypes = ['All', ...new Set(produce.map(p => p.type))];
-
-    const filteredProduce = produce
-        .filter(p => filter === 'All' || p.type === filter)
-        .filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
-
-    return (
-        <Layout>
-            <Header title="Available Produce" />
-            <div className="p-4">
-                <div className="mb-4 relative">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input 
-                        type="text" 
-                        placeholder="Search for produce..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    />
-                </div>
-                <div className="mb-4">
-                    <div className="flex space-x-2 overflow-x-auto pb-2">
-                        {produceTypes.map(type => (
-                            <button 
-                                key={type}
-                                onClick={() => setFilter(type)}
-                                className={`px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
-                                    filter === type 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
-                                }`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredProduce.map(p => <ProduceCard key={p.id} produce={p} />)}
-                    {filteredProduce.length === 0 && (
-                        <div className="col-span-1 md:col-span-2 text-center py-10">
-                            <p className="text-gray-500">No produce matching your criteria.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </Layout>
-    );
-};
-
-const MyProduceScreen = () => {
-    const { user } = useAuth();
-    const { produce } = useData();
-    const navigate = useNavigate();
-
-    if (!user) return null;
-
-    const myProduce = produce.filter(p => p.farmerId === user.id);
-
-    return (
-        <Layout>
-            <Header title="My Produce" />
-            <div className="p-4">
-                <div className="flex justify-end mb-4">
-                    <button
-                        onClick={() => navigate('/my-produce/add')}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold flex items-center hover:bg-green-700 transition-colors"
-                    >
-                        <PlusIcon className="w-5 h-5 mr-2" />
-                        List New Produce
-                    </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {myProduce.map(p => <ProduceCard key={p.id} produce={p} />)}
-                    {myProduce.length === 0 && (
-                        <div className="col-span-1 md:col-span-2 text-center py-10 bg-white rounded-lg shadow-md">
-                            <LeafIcon className="w-12 h-12 text-gray-300 mx-auto" />
-                            <p className="mt-2 text-gray-500">You haven't listed any produce yet.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </Layout>
-    );
-};
-
-const AddProduceScreen = () => {
-    const { user } = useAuth();
-    const { addProduce } = useData();
-    const navigate = useNavigate();
-    const { notify } = useNotifier();
-
-    const [formData, setFormData] = useState({
-        name: '',
-        type: 'Vegetable',
-        quantity: '100',
-        pricePerKg: '50',
-        description: '',
-        harvestDate: new Date().toISOString().split('T')[0],
-    });
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!user || !formData.name || !formData.quantity || !formData.pricePerKg || !formData.harvestDate) {
-            notify("Please fill all required fields.", "warning");
-            return;
-        }
-
-        const newProduce: Produce = {
-            id: self.crypto.randomUUID(),
-            farmerId: user.id,
-            farmerName: user.name,
-            name: formData.name,
-            type: formData.type,
-            quantity: parseInt(formData.quantity, 10),
-            pricePerKg: parseInt(formData.pricePerKg, 10),
-            location: user.location,
-            imageUrl: `https://picsum.photos/seed/${formData.name.replace(/\s/g, '')}/400/300`,
-            description: formData.description,
-            harvestDate: formData.harvestDate,
-        };
-
-        addProduce(newProduce);
-        notify("Produce listed successfully!", "success");
-        navigate('/my-produce');
-    };
-
-    return (
-        <Layout>
-            <Header title="List New Produce" showBack={true} />
-            <div className="p-4">
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mt-4 space-y-4">
-                    <InputField label="Produce Name" name="name" value={formData.name} onChange={handleChange} placeholder="e.g., Fresh Tomatoes" />
-                    <div>
-                        <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Produce Type</label>
-                        <select id="type" name="type" value={formData.type} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                            <option>Vegetable</option>
-                            <option>Fruit</option>
-                            <option>Grain</option>
-                            <option>Other</option>
-                        </select>
-                    </div>
-                    <InputField label="Quantity (kg)" name="quantity" type="number" value={formData.quantity} onChange={handleChange} min="1" />
-                    <InputField label="Price per Kg (KES)" name="pricePerKg" type="number" value={formData.pricePerKg} onChange={handleChange} min="1" />
-                    <InputField label="Harvest Date" name="harvestDate" type="date" value={formData.harvestDate} onChange={handleChange} />
-                    <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={3} className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Organically grown, sweet and juicy."></textarea>
-                    </div>
-                    <button type="submit" className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
-                        Add to My Listings
-                    </button>
-                </form>
-            </div>
-        </Layout>
-    );
-};
-
-const ContractsScreen = () => {
-  const { user } = useAuth();
-  const { contracts } = useData();
-  const [filter, setFilter] = useState<ContractStatus | 'All'>('All');
-
-  const relevantContracts = contracts.filter(c => c.farmerId === user?.id || c.vendorId === user?.id);
-  const filteredContracts = filter === 'All' ? relevantContracts : relevantContracts.filter(c => c.status === filter);
-
-  const statuses: (ContractStatus | 'All')[] = ['All', ...Object.values(ContractStatus)];
-
-  return (
-    <Layout>
-      <Header title="Your Contracts" />
-      <div className="p-4">
-        <div className="mb-4">
-          <div className="flex space-x-2 overflow-x-auto pb-2">
-            {statuses.map(status => (
-              <button
-                key={status}
-                onClick={() => setFilter(status)}
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
-                    filter === status
-                    ? 'bg-green-600 text-white'
-                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-100'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-4">
-          {filteredContracts.map(c => <ContractCard key={c.id} contract={c} />)}
-          {filteredContracts.length === 0 && (
-             <div className="text-center py-10">
-                <FileTextIcon className="w-12 h-12 text-gray-300 mx-auto" />
-                <p className="mt-2 text-gray-500">No contracts in this category.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </Layout>
-  );
-};
-
-const ContractDetailScreen = () => {
-  const { id } = useParams();
-  const { contracts, users, updateUser, updateContract, addTransaction, messages, addMessage } = useData();
-  const { user } = useAuth();
-  const { notify } = useNotifier();
-  const navigate = useNavigate();
-
-  const [messageText, setMessageText] = useState('');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const contract = contracts.find(c => c.id === id);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  if (!contract) return <Layout><Header title="Contract Not Found" showBack={true} /><p className="p-4">Could not find the requested contract.</p></Layout>;
-
-  const otherParty = user?.id === contract.farmerId
-    ? users.find(u => u.id === contract.vendorId)
-    : users.find(u => u.id === contract.farmerId);
-
-  const handleStatusUpdate = (newStatus: ContractStatus) => {
-    let updatedContract = { ...contract, status: newStatus, statusHistory: [...contract.statusHistory, { status: newStatus, timestamp: new Date().toISOString() }]};
-    
-    // Logic for payment release when status becomes PAYMENT_RELEASED
-    if (newStatus === ContractStatus.PAYMENT_RELEASED) {
-      const farmer = users.find(u => u.id === contract.farmerId);
-      const vendor = users.find(u => u.id === contract.vendorId);
-      
-      if (farmer && vendor && vendor.walletBalance >= contract.totalPrice) {
-        const updatedVendor = { ...vendor, walletBalance: vendor.walletBalance - contract.totalPrice };
-        const updatedFarmer = { ...farmer, walletBalance: farmer.walletBalance + contract.totalPrice };
-
-        updateUser(updatedVendor);
-        updateUser(updatedFarmer);
-        
-        addTransaction({
-            id: self.crypto.randomUUID(),
-            userId: vendor.id,
-            type: TransactionType.PAYMENT_SENT,
-            amount: -contract.totalPrice,
-            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
-            date: new Date().toISOString().split('T')[0],
-            relatedContractId: contract.id,
-        });
-
-        addTransaction({
-            id: self.crypto.randomUUID(),
-            userId: farmer.id,
-            type: TransactionType.PAYMENT_RECEIVED,
-            amount: contract.totalPrice,
-            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
-            date: new Date().toISOString().split('T')[0],
-            relatedContractId: contract.id,
-        });
-
-        updatedContract.paymentDate = new Date().toISOString().split('T')[0];
-        notify("Payment successfully transferred!", "success");
-
-      } else {
-        notify("Insufficient funds for payment transfer.", "error");
-        return; // Don't update status if payment fails
-      }
-    }
-    
-    updateContract(updatedContract);
-    notify(`Contract status updated to ${newStatus}`, "success");
-  };
-
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!messageText.trim() || !user) return;
-    const newMessage: Message = {
-      id: self.crypto.randomUUID(),
-      contractId: contract.id,
-      senderId: user.id,
-      senderName: user.name,
-      text: messageText.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    addMessage(newMessage);
-    setMessageText('');
-  }
-
-  const contractMessages = messages.filter(m => m.contractId === contract.id).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  // Determine if current user is the creator.
-  // We rely on contract.createdBy which is now fetched from logistics payload in api.ts
-  const isCreator = user?.id === contract.createdBy;
-
-  return (
-    <Layout>
-      <Header title="Contract Details" showBack={true} />
-      <div className="p-4 space-y-6">
-        {/* Contract Info */}
-        <div className="bg-white p-4 rounded-lg shadow-md">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-gray-800">{contract.produceName}</h2>
-              <p className="text-sm text-gray-500">with {otherParty?.name}</p>
-            </div>
-            <span className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(contract.status)}`}>
-              {contract.status}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-            <InfoItem label="Quantity" value={`${contract.quantity} kg`} />
-            <InfoItem label="Total Price" value={`KES ${contract.totalPrice.toLocaleString()}`} />
-            <InfoItem label="Farmer" value={contract.farmerName} />
-            <InfoItem label="Vendor" value={contract.vendorName} />
-            <InfoItem label="Delivery Deadline" value={contract.deliveryDeadline} />
-            {contract.paymentDate && <InfoItem label="Paid On" value={contract.paymentDate} />}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="bg-white p-4 rounded-lg shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3 text-center">Contract Actions</h3>
-          <div className="grid grid-cols-2 gap-3">
-             {/* Pending Actions: Accept or Reject/Cancel */}
-             {contract.status === ContractStatus.PENDING && (
-                <>
-                  {!isCreator ? (
-                      <>
-                        <button onClick={() => handleStatusUpdate(ContractStatus.ACTIVE)} className="bg-blue-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-blue-700">
-                            Accept Offer
-                        </button>
-                        <button onClick={() => handleStatusUpdate(ContractStatus.CANCELLED)} className="bg-red-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-red-600">
-                            Decline Offer
-                        </button>
-                      </>
-                  ) : (
-                       <button onClick={() => handleStatusUpdate(ContractStatus.CANCELLED)} className="bg-red-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-red-600 col-span-2">
-                            Cancel Offer
-                       </button>
-                  )}
-                </>
-             )}
-
-             {/* Active Actions: Confirm Delivery (Vendor only) */}
-             {contract.status === ContractStatus.ACTIVE && user?.role === UserRole.VENDOR && (
-              <button onClick={() => handleStatusUpdate(ContractStatus.DELIVERY_CONFIRMED)} className="bg-yellow-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-yellow-600 col-span-2">
-                Confirm Delivery
-              </button>
-            )}
-
-            {/* Delivery Confirmed Actions: Release Payment (Vendor only) */}
-             {contract.status === ContractStatus.DELIVERY_CONFIRMED && user?.role === UserRole.VENDOR && (
-              <button onClick={() => handleStatusUpdate(ContractStatus.PAYMENT_RELEASED)} className="bg-green-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-green-600 col-span-2">
-                Release Payment
-              </button>
-            )}
-
-            <button onClick={() => notify("Dispute resolution feature coming soon.", "info")} className="bg-orange-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-orange-600 col-span-2">
-              Raise Dispute
-            </button>
-          </div>
-        </div>
-
-        {/* Logistics */}
-        {contract.logistics && (
-          <div className="bg-white p-4 rounded-lg shadow-md">
-            <h3 className="font-semibold text-gray-800 mb-3 flex items-center"><TruckIcon className="w-5 h-5 mr-2" /> Logistics Details</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-                <InfoItem label="Partner" value={contract.logistics.partner} />
-                <InfoItem label="Status" value={contract.logistics.status} />
-                {contract.logistics.pickupTime && <InfoItem label="Pickup Time" value={new Date(contract.logistics.pickupTime).toLocaleString()} />}
-                {contract.logistics.deliveryTime && <InfoItem label="Delivery Time" value={new Date(contract.logistics.deliveryTime).toLocaleString()} />}
-            </div>
-            <div className="mt-4 flex justify-around">
-                <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Pickup QR Code</p>
-                    <QrCodeIcon className="w-16 h-16 text-gray-700" />
-                </div>
-                <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Delivery QR Code</p>
-                    <QrCodeIcon className="w-16 h-16 text-gray-700" />
-                </div>
-            </div>
-          </div>
-        )}
-        
-        {/* Messaging */}
-        <div className="bg-white rounded-lg shadow-md">
-            <h3 className="font-semibold text-gray-800 p-4 border-b flex items-center"><MessageSquareIcon className="w-5 h-5 mr-2" /> Chat with {otherParty?.name}</h3>
-            <div className="p-4 h-64 overflow-y-auto bg-gray-50">
-                {contractMessages.map(msg => (
-                    <div key={msg.id} className={`flex mb-3 ${msg.senderId === user?.id ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`rounded-lg px-3 py-2 max-w-xs ${msg.senderId === user?.id ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-800'}`}>
-                           <p className="text-sm">{msg.text}</p>
-                           <p className="text-xs opacity-70 mt-1 text-right">{new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                        </div>
-                    </div>
-                ))}
-                <div ref={messagesEndRef} />
-            </div>
-            <form onSubmit={handleSendMessage} className="p-4 border-t flex">
-                <input 
-                    type="text"
-                    value={messageText}
-                    onChange={e => setMessageText(e.target.value)}
-                    placeholder="Type a message..."
-                    className="flex-grow border rounded-l-lg p-2 text-sm focus:ring-2 focus:ring-green-500 focus:outline-none"
-                />
-                <button type="submit" className="bg-green-600 text-white px-4 rounded-r-lg font-semibold text-sm hover:bg-green-700">
-                    Send
-                </button>
-            </form>
-        </div>
-      </div>
-    </Layout>
-  );
-};
-
-
-const ProfileScreen = () => {
-    const { user, logout } = useAuth();
-    if (!user) return null;
-
-    return (
-        <Layout>
-            <Header title="My Profile" />
-            <div className="p-4">
-                <div className="bg-white p-6 rounded-lg shadow-md text-center">
-                    <img src={user.avatarUrl} alt={user.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-green-200" />
-                    <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
-                    <p className={`text-sm font-semibold uppercase mt-1 ${user.role === UserRole.FARMER ? 'text-green-600' : 'text-amber-600'}`}>{user.role}</p>
-                    <div className="flex justify-center items-center mt-2">
-                        <StarIcon className="w-5 h-5 text-yellow-400 mr-1" />
-                        <span className="font-bold text-gray-700">{user.rating.toFixed(1)}</span>
-                        <span className="text-gray-500 text-sm ml-1">({user.reviews} reviews)</span>
-                    </div>
-                </div>
-                
-                <div className="bg-white p-4 rounded-lg shadow-md mt-6 text-sm">
-                    <ProfileInfoItem icon={UserIcon} label="Email" value={user.email} />
-                    <ProfileInfoItem icon={MapPinIcon} label="Location" value={user.location} />
-                    {user.farmSize && <ProfileInfoItem icon={LeafIcon} label="Farm Size" value={user.farmSize} />}
-                    {user.businessName && <ProfileInfoItem icon={UsersIcon} label="Business Name" value={user.businessName} />}
-                </div>
-
-                <div className="mt-6">
-                    <button 
-                        onClick={logout}
-                        className="w-full flex items-center justify-center bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 transition-colors"
-                    >
-                        <LogOutIcon className="w-5 h-5 mr-2" />
-                        Logout
-                    </button>
-                </div>
-            </div>
-        </Layout>
-    );
-};
-
-
-const WalletScreen = () => {
-  const { user, login } = useAuth();
-  const { transactions } = useData();
-  const { notify } = useNotifier();
-
-  if(!user) return null;
-
-  const userTransactions = transactions.filter(t => t.userId === user.id);
-
-  const handleAction = (action: string) => {
-    notify(`${action} feature coming soon.`, "info");
-  }
-
-  return (
-    <Layout>
-        <Header title="My Wallet" />
-        <div className="p-4">
-            <div className="bg-gradient-to-br from-green-600 to-green-800 text-white p-6 rounded-xl shadow-lg mb-6">
-                <p className="text-sm opacity-80">Current Balance</p>
-                <p className="text-4xl font-bold mt-1">KES {user.walletBalance.toLocaleString()}</p>
-                <div className="mt-6 grid grid-cols-2 gap-4">
-                    <button onClick={() => handleAction('Top Up')} className="bg-white bg-opacity-20 hover:bg-opacity-30 p-3 rounded-lg text-sm font-semibold flex items-center justify-center">
-                        <PlusIcon className="w-5 h-5 mr-2" /> Top Up
-                    </button>
-                    <button onClick={() => handleAction('Withdraw')} className="bg-white bg-opacity-20 hover:bg-opacity-30 p-3 rounded-lg text-sm font-semibold flex items-center justify-center">
-                        <MinusIcon className="w-5 h-5 mr-2" /> Withdraw
-                    </button>
-                </div>
-            </div>
-
-            <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">Transaction History</h3>
-                <div className="space-y-3">
-                    {userTransactions.length > 0 ? (
-                        userTransactions.map(tx => <TransactionItem key={tx.id} transaction={tx} />)
-                    ) : (
-                        <p className="text-sm text-gray-500 bg-white p-4 rounded-lg shadow-md">No transactions yet.</p>
-                    )}
-                </div>
-            </div>
-        </div>
-    </Layout>
-  )
-};
-
-const NewContractScreen = () => {
-    const { produceId } = useParams();
-    const { produce, users, addContract } = useData();
-    const { user } = useAuth();
-    const navigate = useNavigate();
-    const { notify } = useNotifier();
-
-    const selectedProduce = produce.find(p => p.id === produceId);
-    const [quantity, setQuantity] = useState(1);
-    const [deadline, setDeadline] = useState('');
-    
-    if (!selectedProduce || !user) {
-        return <Navigate to="/produce" replace />;
-    }
-    
-    const farmer = users.find(u => u.id === selectedProduce.farmerId);
-    const totalPrice = quantity * selectedProduce.pricePerKg;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (quantity > selectedProduce.quantity) {
-            notify("Cannot offer for more than available quantity.", "error");
-            return;
-        }
-        if (!deadline) {
-            notify("Please set a delivery deadline.", "warning");
-            return;
-        }
-
-        const newContract: Contract = {
-            id: self.crypto.randomUUID(),
-            produceId: selectedProduce.id,
-            produceName: selectedProduce.name,
-            farmerId: selectedProduce.farmerId,
-            vendorId: user.id,
-            farmerName: selectedProduce.farmerName,
-            vendorName: user.name,
-            quantity: quantity,
-            totalPrice: totalPrice,
-            deliveryDeadline: deadline,
-            status: ContractStatus.PENDING,
-            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-            createdBy: user.id, // Track creator
-        };
-        addContract(newContract);
-        notify("Offer submitted successfully!", "success");
-        navigate('/contracts');
-    };
-
-    return (
-        <Layout>
-            <Header title="Make an Offer" showBack={true} />
-            <div className="p-4">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-bold text-gray-800">{selectedProduce.name}</h2>
-                    <p className="text-sm text-gray-500 mb-4">From: {selectedProduce.farmerName}</p>
-                    <div className="space-y-2 text-sm text-gray-700">
-                        <p>Available: <span className="font-semibold">{selectedProduce.quantity} kg</span></p>
-                        <p>Price: <span className="font-semibold">KES {selectedProduce.pricePerKg}/kg</span></p>
-                    </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mt-6 space-y-4">
-                    <h3 className="text-lg font-semibold text-center">Your Offer</h3>
-                    <InputField 
-                        label="Quantity (kg)"
-                        name="quantity"
-                        type="number"
-                        value={String(quantity)}
-                        onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        min="1"
-                        max={String(selectedProduce.quantity)}
-                    />
-                     <InputField 
-                        label="Delivery Deadline"
-                        name="deadline"
-                        type="date"
-                        value={deadline}
-                        onChange={e => setDeadline(e.target.value)}
-                        min={new Date().toISOString().split("T")[0]}
-                    />
-
-                    <div className="pt-4 border-t text-center">
-                        <p className="text-gray-600">Total Price</p>
-                        <p className="text-3xl font-bold text-green-600">KES {totalPrice.toLocaleString()}</p>
-                    </div>
-                    
-                    <button
-                        type="submit"
-                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-                    >
-                        Submit Offer
-                    </button>
-                </form>
-            </div>
-        </Layout>
-    );
-};
-
-const FarmerNewContractScreen = () => {
-    const { produceId } = useParams();
-    const { produce, users, addContract } = useData();
-    const { user } = useAuth();
-    const navigate = useNavigate();
-    const { notify } = useNotifier();
-
-    const selectedProduce = produce.find(p => p.id === produceId);
-
-    const [vendorId, setVendorId] = useState('');
-    const [quantity, setQuantity] = useState(1);
-    const [deadline, setDeadline] = useState('');
-
-    const vendors = users.filter(u => u.role === UserRole.VENDOR);
-
-    useEffect(() => {
-        if (vendors.length > 0) {
-            setVendorId(vendors[0].id);
-        }
-    }, []); // Run only once
-
-    if (!selectedProduce || !user || user.id !== selectedProduce.farmerId) {
-        return <Navigate to="/my-produce" replace />;
-    }
-
-    const totalPrice = quantity * selectedProduce.pricePerKg;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!vendorId) {
-            notify("Please select a vendor.", "error");
-            return;
-        }
-        if (quantity > selectedProduce.quantity) {
-            notify("Cannot offer for more than available quantity.", "error");
-            return;
-        }
-        if (!deadline) {
-            notify("Please set a delivery deadline.", "warning");
-            return;
-        }
-        
-        const selectedVendor = users.find(u => u.id === vendorId);
-        if(!selectedVendor) {
-            notify("Selected vendor not found.", "error");
-            return;
-        }
-
-        const newContract: Contract = {
-            id: self.crypto.randomUUID(),
-            produceId: selectedProduce.id,
-            produceName: selectedProduce.name,
-            farmerId: user.id,
-            vendorId: selectedVendor.id,
-            farmerName: user.name,
-            vendorName: selectedVendor.name,
-            quantity: quantity,
-            totalPrice: totalPrice,
-            deliveryDeadline: deadline,
-            status: ContractStatus.PENDING,
-            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-            createdBy: user.id, // Track creator
-        };
-        addContract(newContract);
-        notify(`Contract offer sent to ${selectedVendor.name}!`, "success");
-        navigate('/contracts');
-    };
-
-    return (
-        <Layout>
-            <Header title="Create New Contract" showBack={true} />
-            <div className="p-4">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-bold text-gray-800">{selectedProduce.name}</h2>
-                    <div className="mt-2 space-y-2 text-sm text-gray-700">
-                        <p>Available Quantity: <span className="font-semibold">{selectedProduce.quantity} kg</span></p>
-                        <p>Listing Price: <span className="font-semibold">KES {selectedProduce.pricePerKg}/kg</span></p>
-                    </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mt-6 space-y-4">
-                    <h3 className="text-lg font-semibold text-center">Contract Details</h3>
-                    <div>
-                        <label htmlFor="vendor" className="block text-sm font-medium text-gray-700 mb-1">Select Vendor</label>
-                        <select id="vendor" name="vendor" value={vendorId} onChange={e => setVendorId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                            {vendors.map(v => <option key={v.id} value={v.id}>{v.name} - {v.businessName}</option>)}
-                        </select>
-                    </div>
-                    <InputField 
-                        label="Quantity (kg)"
-                        name="quantity"
-                        type="number"
-                        value={String(quantity)}
-                        onChange={e => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                        min="1"
-                        max={String(selectedProduce.quantity)}
-                    />
-                     <InputField 
-                        label="Delivery Deadline"
-                        name="deadline"
-                        type="date"
-                        value={deadline}
-                        onChange={e => setDeadline(e.target.value)}
-                        min={new Date().toISOString().split("T")[0]}
-                    />
-
-                    <div className="pt-4 border-t text-center">
-                        <p className="text-gray-600">Total Price</p>
-                        <p className="text-3xl font-bold text-green-600">KES {totalPrice.toLocaleString()}</p>
-                    </div>
-                    
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-                    >
-                        Send Contract Offer
-                    </button>
-                </form>
-            </div>
-        </Layout>
-    );
-};
-
-const InsightsScreen = () => {
-    return (
-        <Layout>
-            <Header title="Insights" />
-            <div className="p-4 text-center mt-10">
-                <BarChartIcon className="w-16 h-16 mx-auto text-gray-300" />
-                <h2 className="mt-4 text-xl font-semibold text-gray-700">Coming Soon!</h2>
-                <p className="text-gray-500 mt-2">We're working on providing you with valuable insights about your performance, market trends, and more.</p>
-            </div>
-        </Layout>
-    );
-};
-
-
-// Generic Input Field Component
-interface InputFieldProps {
-    label: string;
-    name: string;
-    type?: string;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    placeholder?: string;
-    [x: string]: any; // for other props like min, max, etc.
-}
-
-const InputField: React.FC<InputFieldProps> = ({ label, name, type = "text", value, onChange, placeholder, ...props }) => (
-    <div>
-        <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
-            {label}
-        </label>
-        <input
-            id={name}
-            name={name}
-            type={type}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder || `Enter ${label.toLowerCase()}`}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            {...props}
-        />
-    </div>
-);
-
-
-function App() {
-  return (
-    <DataProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <HashRouter>
-            <AppRoutes />
-            <ToastContainer />
-          </HashRouter>
-        </NotificationProvider>
-      </AuthProvider>
-    </DataProvider>
-  );
-}
-
-const AppRoutes = () => {
-    const { loading } = useData();
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-gray-100">
-                <div className="text-center">
-                    <LeafIcon className="w-16 h-16 text-green-600 mx-auto animate-spin"/>
-                    <h2 className="mt-4 text-xl font-semibold text-gray-700">Loading Mkulima Express...</h2>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <Routes>
-            <Route path="/login" element={<LoginScreen />} />
-            <Route path="/admin/login" element={<AdminLoginScreen />} />
-            <Route path="/onboarding" element={<OnboardingScreen />} />
-            <Route path="/register/farmer" element={<FarmerRegistrationScreen />} />
-            <Route path="/register/vendor" element={<VendorRegistrationScreen />} />
-            <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
-            
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
-            <Route path="/produce" element={<ProtectedRoute><ProduceScreen /></ProtectedRoute>} />
-            <Route path="/my-produce" element={<ProtectedRoute><MyProduceScreen /></ProtectedRoute>} />
-            <Route path="/my-produce/add" element={<ProtectedRoute><AddProduceScreen /></ProtectedRoute>} />
-            <Route path="/my-produce/:produceId/new-contract" element={<ProtectedRoute><FarmerNewContractScreen /></ProtectedRoute>} />
-            <Route path="/produce/:produceId/new-contract" element={<ProtectedRoute><NewContractScreen/></ProtectedRoute>} />
-            <Route path="/contracts" element={<ProtectedRoute><ContractsScreen /></ProtectedRoute>} />
-            <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetailScreen /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
-            <Route path="/wallet" element={<ProtectedRoute><WalletScreen /></ProtectedRoute>} />
-            <Route path="/insights" element={<ProtectedRoute><InsightsScreen /></ProtectedRoute>} />
-
-            <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-    )
-}
-
-export default App;
+    const produceTypes = ['All', ...new Set(produce.
