@@ -1,0 +1,59 @@
+﻿<<<<<<< HEAD
+Supabase integration
+
+1) Create a project at https://supabase.com and get:
+   - Project URL
+   - anon public API key
+
+2) Add a .env file in the project root:
+
+   VITE_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+   VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+
+3) Use the client
+
+   import { supabase } from './supabaseClient'
+
+   // Example: sign in with OTP
+   await supabase.auth.signInWithOtp({ email: 'you@example.com' })
+
+   // Example: query a table
+   const { data, error } = await supabase.from('produce').select('*')
+
+4) Security note
+   - Only use the anon key on the client.
+   - Define Row Level Security (RLS) on your tables in Supabase.
+
+5) Development
+   - Vite only exposes env vars prefixed with VITE_.
+   - Restart `npm run dev` after changing .env.
+=======
+Supabase integration
+
+1) Create a project at https://supabase.com and get:
+   - Project URL
+   - anon public API key
+
+2) Add a .env file in the project root:
+
+   VITE_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
+   VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+
+3) Use the client
+
+   import { supabase } from './supabaseClient'
+
+   // Example: sign in with OTP
+   await supabase.auth.signInWithOtp({ email: 'you@example.com' })
+
+   // Example: query a table
+   const { data, error } = await supabase.from('produce').select('*')
+
+4) Security note
+   - Only use the anon key on the client.
+   - Define Row Level Security (RLS) on your tables in Supabase.
+
+5) Development
+   - Vite only exposes env vars prefixed with VITE_.
+   - Restart `npm run dev` after changing .env.
+>>>>>>> b5c1bfda743e858a76f3b454dbaf17668a504bba
