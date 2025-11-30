@@ -1,8 +1,33 @@
+
 import { User, Produce, Contract, UserRole, ContractStatus, Transaction, TransactionType, Message } from './types';
+
+// Constants for UUIDs to maintain relationships in mock data
+const F1_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+const V1_ID = 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380b22';
+const F2_ID = 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380c33';
+const AD_ID = 'd0eebc99-9c0b-4ef8-bb6d-6bb9bd380d44';
+
+const P1_ID = 'e0eebc99-9c0b-4ef8-bb6d-6bb9bd380e55';
+const P2_ID = 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380f66';
+const P3_ID = '10eebc99-9c0b-4ef8-bb6d-6bb9bd380177';
+
+const C1_ID = '20eebc99-9c0b-4ef8-bb6d-6bb9bd380288';
+const C2_ID = '30eebc99-9c0b-4ef8-bb6d-6bb9bd380399';
+const C3_ID = '40eebc99-9c0b-4ef8-bb6d-6bb9bd380400';
+
+const M1_ID = '50eebc99-9c0b-4ef8-bb6d-6bb9bd380511';
+const M2_ID = '60eebc99-9c0b-4ef8-bb6d-6bb9bd380622';
+const M3_ID = '70eebc99-9c0b-4ef8-bb6d-6bb9bd380733';
+
+const TX1_ID = '80eebc99-9c0b-4ef8-bb6d-6bb9bd380844';
+const TX2_ID = '90eebc99-9c0b-4ef8-bb6d-6bb9bd380955';
+const TX3_ID = '00eebc99-9c0b-4ef8-bb6d-6bb9bd380066';
+const TX4_ID = 'a1eebc99-9c0b-4ef8-bb6d-6bb9bd380a77';
+
 
 export const mockUsers: { [key: string]: User } = {
   'farmer-01': {
-    id: 'farmer-01',
+    id: F1_ID,
     name: 'Juma Mwangi',
     email: 'juma.mwangi@example.com',
     role: UserRole.FARMER,
@@ -16,7 +41,7 @@ export const mockUsers: { [key: string]: User } = {
     farmSize: '15 Acres',
   },
   'vendor-01': {
-    id: 'vendor-01',
+    id: V1_ID,
     name: 'Aisha Omar',
     email: 'aisha.omar@example.com',
     role: UserRole.VENDOR,
@@ -30,7 +55,7 @@ export const mockUsers: { [key: string]: User } = {
     businessName: 'Aisha Fresh Produce',
   },
   'farmer-02': {
-    id: 'farmer-02',
+    id: F2_ID,
     name: 'Mary Wanjiru',
     email: 'mary.wanjiru@example.com',
     role: UserRole.FARMER,
@@ -44,7 +69,7 @@ export const mockUsers: { [key: string]: User } = {
     farmSize: '10 Acres',
   },
   'admin-01': {
-    id: 'admin-01',
+    id: AD_ID,
     name: 'Admin User',
     email: 'admin@mkulima.express',
     role: UserRole.ADMIN,
@@ -58,8 +83,8 @@ export const mockUsers: { [key: string]: User } = {
 
 export const mockProduce: Produce[] = [
   {
-    id: 'prod-001',
-    farmerId: 'farmer-01',
+    id: P1_ID,
+    farmerId: F1_ID,
     farmerName: 'Juma Mwangi',
     name: 'Fresh Sukuma Wiki (Kale)',
     type: 'Vegetable',
@@ -71,8 +96,8 @@ export const mockProduce: Produce[] = [
     harvestDate: '2024-08-10',
   },
   {
-    id: 'prod-002',
-    farmerId: 'farmer-01',
+    id: P2_ID,
+    farmerId: F1_ID,
     farmerName: 'Juma Mwangi',
     name: 'Ripe Avocados',
     type: 'Fruit',
@@ -84,8 +109,8 @@ export const mockProduce: Produce[] = [
     harvestDate: '2024-08-15',
   },
   {
-    id: 'prod-003',
-    farmerId: 'farmer-02',
+    id: P3_ID,
+    farmerId: F2_ID,
     farmerName: 'Mary Wanjiru',
     name: 'Red Onions',
     type: 'Vegetable',
@@ -100,11 +125,11 @@ export const mockProduce: Produce[] = [
 
 export const mockContracts: Contract[] = [
   {
-    id: 'contract-01',
-    produceId: 'prod-001',
+    id: C1_ID,
+    produceId: P1_ID,
     produceName: 'Fresh Sukuma Wiki (Kale)',
-    farmerId: 'farmer-01',
-    vendorId: 'vendor-01',
+    farmerId: F1_ID,
+    vendorId: V1_ID,
     farmerName: 'Juma Mwangi',
     vendorName: 'Aisha Omar',
     quantity: 50,
@@ -124,11 +149,11 @@ export const mockContracts: Contract[] = [
     }
   },
   {
-    id: 'contract-02',
-    produceId: 'prod-002',
+    id: C2_ID,
+    produceId: P2_ID,
     produceName: 'Ripe Avocados',
-    farmerId: 'farmer-01',
-    vendorId: 'vendor-01',
+    farmerId: F1_ID,
+    vendorId: V1_ID,
     farmerName: 'Juma Mwangi',
     vendorName: 'Aisha Omar',
     quantity: 100,
@@ -151,11 +176,11 @@ export const mockContracts: Contract[] = [
     }
   },
   {
-    id: 'contract-03',
-    produceId: 'prod-003',
+    id: C3_ID,
+    produceId: P3_ID,
     produceName: 'Red Onions',
-    farmerId: 'farmer-02',
-    vendorId: 'vendor-01',
+    farmerId: F2_ID,
+    vendorId: V1_ID,
     farmerName: 'Mary Wanjiru',
     vendorName: 'Aisha Omar',
     quantity: 75,
@@ -182,25 +207,25 @@ export const mockContracts: Contract[] = [
 
 export const mockMessages: Message[] = [
   {
-    id: 'msg-01',
-    contractId: 'contract-01',
-    senderId: 'vendor-01',
+    id: M1_ID,
+    contractId: C1_ID,
+    senderId: V1_ID,
     senderName: 'Aisha Omar',
     text: 'Hi Juma, looking forward to the delivery. Please confirm the pickup time.',
     timestamp: '2024-08-10T11:35:00Z',
   },
   {
-    id: 'msg-02',
-    contractId: 'contract-01',
-    senderId: 'farmer-01',
+    id: M2_ID,
+    contractId: C1_ID,
+    senderId: F1_ID,
     senderName: 'Juma Mwangi',
     text: 'Hello Aisha, the logistics partner will be there tomorrow morning around 9 AM.',
     timestamp: '2024-08-10T11:40:00Z',
   },
   {
-    id: 'msg-03',
-    contractId: 'contract-01',
-    senderId: 'vendor-01',
+    id: M3_ID,
+    contractId: C1_ID,
+    senderId: V1_ID,
     senderName: 'Aisha Omar',
     text: 'Perfect, thank you!',
     timestamp: '2024-08-10T11:41:00Z',
@@ -209,34 +234,34 @@ export const mockMessages: Message[] = [
 
 export const mockTransactions: Transaction[] = [
   {
-    id: 'txn-001',
-    userId: 'vendor-01',
+    id: TX1_ID,
+    userId: V1_ID,
     type: TransactionType.PAYMENT_SENT,
     amount: -6000,
     description: 'Payment for Red Onions',
     date: '2024-08-09',
-    relatedContractId: 'contract-03',
+    relatedContractId: C3_ID,
   },
   {
-    id: 'txn-002',
-    userId: 'farmer-02',
+    id: TX2_ID,
+    userId: F2_ID,
     type: TransactionType.PAYMENT_RECEIVED,
     amount: 6000,
     description: 'Received payment for Red Onions',
     date: '2024-08-09',
-    relatedContractId: 'contract-03',
+    relatedContractId: C3_ID,
   },
   {
-    id: 'txn-003',
-    userId: 'vendor-01',
+    id: TX3_ID,
+    userId: V1_ID,
     type: TransactionType.TOP_UP,
     amount: 20000,
     description: 'Wallet Top-up',
     date: '2024-08-01',
   },
   {
-    id: 'txn-004',
-    userId: 'farmer-01',
+    id: TX4_ID,
+    userId: F1_ID,
     type: TransactionType.TOP_UP,
     amount: 5000,
     description: 'Wallet Top-up',

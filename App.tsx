@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, createContext, useMemo, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
@@ -28,6 +29,55 @@ const BarChartIcon = ({ className }: { className?: string }) => <svg xmlns="http
 const MessageSquareIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>;
 const QrCodeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><line x1="14" x2="14.01" y1="14" y2="14"></line><line x1="17" x2="21" y1="14" y2="14"></line><line x1="14" x2="14" y1="17" y2="21"></line><line x1="17" x2="17" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="21" y2="21.01"></line></svg>;
 
+
+// --- UI COMPONENTS --- //
+
+const getStatusColor = (status: ContractStatus) => {
+  switch (status) {
+    case ContractStatus.ACTIVE: return 'text-blue-600 bg-blue-100';
+    case ContractStatus.COMPLETED: return 'text-green-600 bg-green-100';
+    case ContractStatus.DELIVERY_CONFIRMED: return 'text-yellow-600 bg-yellow-100';
+    case ContractStatus.PAYMENT_RELEASED: return 'text-purple-600 bg-purple-100';
+    case ContractStatus.PENDING: return 'text-gray-600 bg-gray-100';
+    case ContractStatus.DISPUTED: return 'text-orange-600 bg-orange-100';
+    default: return 'text-red-600 bg-red-100';
+  }
+};
+
+const InfoItem = ({ label, value }: { label: string, value: string }) => (
+    <div>
+      <p className="text-gray-500">{label}</p>
+      <p className="font-semibold">{value}</p>
+    </div>
+);
+
+const ProfileInfoItem = ({ icon: Icon, label, value }: { icon: React.FC<{className?:string}>, label: string, value: string }) => (
+    <div className="flex items-center border-b last:border-b-0 py-3">
+        <Icon className="w-5 h-5 text-gray-400 mr-4" />
+        <div>
+            <p className="text-gray-500 text-xs">{label}</p>
+            <p className="text-gray-800 font-medium">{value}</p>
+        </div>
+    </div>
+);
+
+const TransactionItem: React.FC<{ transaction: Transaction }> = ({ transaction }) => {
+    const isCredit = transaction.amount > 0;
+    return (
+        <div className="bg-white p-3 rounded-lg shadow-md flex items-center">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${isCredit ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                {isCredit ? <PlusIcon className="w-6 h-6"/> : <MinusIcon className="w-6 h-6"/>}
+            </div>
+            <div className="flex-grow">
+                <p className="font-semibold text-gray-800 text-sm">{transaction.description}</p>
+                <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</p>
+            </div>
+            <p className={`font-bold text-sm ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
+               {isCredit ? '+' : ''}KES {transaction.amount.toLocaleString()}
+            </p>
+        </div>
+    );
+}
 
 // --- DATA CONTEXT --- //
 interface DataContextType {
@@ -165,7 +215,7 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   const register = async (userData: UserRegistrationData) => {
     const newUser: User = {
       ...userData,
-      id: `user-${Date.now()}`,
+      id: self.crypto.randomUUID(),
       rating: 0,
       reviews: 0,
       avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
@@ -232,56 +282,6 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   }
   return <>{children}</>;
 };
-
-
-// --- UI COMPONENTS --- //
-
-const getStatusColor = (status: ContractStatus) => {
-  switch (status) {
-    case ContractStatus.ACTIVE: return 'text-blue-600 bg-blue-100';
-    case ContractStatus.COMPLETED: return 'text-green-600 bg-green-100';
-    case ContractStatus.DELIVERY_CONFIRMED: return 'text-yellow-600 bg-yellow-100';
-    case ContractStatus.PAYMENT_RELEASED: return 'text-purple-600 bg-purple-100';
-    case ContractStatus.PENDING: return 'text-gray-600 bg-gray-100';
-    case ContractStatus.DISPUTED: return 'text-orange-600 bg-orange-100';
-    default: return 'text-red-600 bg-red-100';
-  }
-};
-
-const InfoItem = ({ label, value }: { label: string, value: string }) => (
-    <div>
-      <p className="text-gray-500">{label}</p>
-      <p className="font-semibold">{value}</p>
-    </div>
-);
-
-const ProfileInfoItem = ({ icon: Icon, label, value }: { icon: React.FC<{className?:string}>, label: string, value: string }) => (
-    <div className="flex items-center border-b last:border-b-0 py-3">
-        <Icon className="w-5 h-5 text-gray-400 mr-4" />
-        <div>
-            <p className="text-gray-500 text-xs">{label}</p>
-            <p className="text-gray-800 font-medium">{value}</p>
-        </div>
-    </div>
-);
-
-const TransactionItem: React.FC<{ transaction: Transaction }> = ({ transaction }) => {
-    const isCredit = transaction.amount > 0;
-    return (
-        <div className="bg-white p-3 rounded-lg shadow-md flex items-center">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 ${isCredit ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                {isCredit ? <PlusIcon className="w-6 h-6"/> : <MinusIcon className="w-6 h-6"/>}
-            </div>
-            <div className="flex-grow">
-                <p className="font-semibold text-gray-800 text-sm">{transaction.description}</p>
-                <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</p>
-            </div>
-            <p className={`font-bold text-sm ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
-               {isCredit ? '+' : ''}KES {transaction.amount.toLocaleString()}
-            </p>
-        </div>
-    );
-}
 
 const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
   const { user } = useAuth();
@@ -1130,7 +1130,7 @@ const AddProduceScreen = () => {
         }
 
         const newProduce: Produce = {
-            id: `prod-${Date.now()}`,
+            id: self.crypto.randomUUID(),
             farmerId: user.id,
             farmerName: user.name,
             name: formData.name,
@@ -1262,7 +1262,7 @@ const ContractDetailScreen = () => {
         updateUser(updatedFarmer);
         
         addTransaction({
-            id: `txn-${Date.now()}-v`,
+            id: self.crypto.randomUUID(),
             userId: vendor.id,
             type: TransactionType.PAYMENT_SENT,
             amount: -contract.totalPrice,
@@ -1272,7 +1272,7 @@ const ContractDetailScreen = () => {
         });
 
         addTransaction({
-            id: `txn-${Date.now()}-f`,
+            id: self.crypto.randomUUID(),
             userId: farmer.id,
             type: TransactionType.PAYMENT_RECEIVED,
             amount: contract.totalPrice,
@@ -1298,7 +1298,7 @@ const ContractDetailScreen = () => {
     e.preventDefault();
     if (!messageText.trim() || !user) return;
     const newMessage: Message = {
-      id: `msg-${Date.now()}`,
+      id: self.crypto.randomUUID(),
       contractId: contract.id,
       senderId: user.id,
       senderName: user.name,
@@ -1528,7 +1528,7 @@ const NewContractScreen = () => {
         }
 
         const newContract: Contract = {
-            id: `contract-${Date.now()}`,
+            id: self.crypto.randomUUID(),
             produceId: selectedProduce.id,
             produceName: selectedProduce.name,
             farmerId: selectedProduce.farmerId,
@@ -1645,7 +1645,7 @@ const FarmerNewContractScreen = () => {
         }
 
         const newContract: Contract = {
-            id: `contract-${Date.now()}`,
+            id: self.crypto.randomUUID(),
             produceId: selectedProduce.id,
             produceName: selectedProduce.name,
             farmerId: user.id,
