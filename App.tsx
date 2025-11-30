@@ -486,17 +486,22 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    // Optimistically clear local state immediately to give instant feedback
+    setUser(null);
+    notify("Logged out successfully", "info");
+
     try {
         await supabase.auth.signOut();
     } catch (error) {
         console.error("Error signing out:", error);
-    } finally {
-        setUser(null);
-        notify("Logged out successfully", "info");
+        // User is already cleared locally, so no need to alert on error unless debugging
     }
   };
 
-  const value = useMemo(() => ({ user, login, logout, register, loading }), [user, loading]);
+  // Removed useMemo wrapper because logout/login/register functions are recreated on every render 
+  // (due to dependencies on other hooks/context) but were not properly included in the dependency array.
+  // This ensures consumers always get the latest valid function references.
+  const value = { user, login, logout, register, loading };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
