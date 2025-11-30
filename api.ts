@@ -220,6 +220,10 @@ export const addUser = async (newUser: User): Promise<User> => {
 };
 
 export const fetchUserProfile = async (userId: string): Promise<User | null> => {
+    if (!userId || typeof userId !== 'string') {
+        logError('fetchUserProfile', { message: 'Invalid userId provided' });
+        return null;
+    }
     try {
         const { data, error } = await supabase
             .from('users')
