@@ -1,11 +1,31 @@
 import { supabase } from './supabaseClient';
-import { User, Produce, Contract, Transaction, Message } from './types';
+import { User, Produce, Contract, Transaction, Message, UserRole } from './types';
 
 // --- SUPABASE API --- //
 
 // Helper to log errors
 const logError = (context: string, error: any) => {
     console.error(`Error in ${context}:`, JSON.stringify(error, null, 2));
+};
+
+// Normalize role helpers
+const normalizeRoleOut = (role: any): UserRole => {
+    const val = String(role || '').toUpperCase();
+    switch (val) {
+        case 'FARMER':
+            return UserRole.FARMER;
+        case 'VENDOR':
+            return UserRole.VENDOR;
+        case 'ADMIN':
+            return UserRole.ADMIN;
+        default:
+            return UserRole.FARMER;
+    }
+};
+const normalizeRoleIn = (role: any): string => {
+    const val = String(role || '').toUpperCase();
+    if (['FARMER', 'VENDOR', 'ADMIN'].includes(val)) return val;
+    return 'FARMER';
 };
 
 // --- MAPPERS --- //
@@ -15,7 +35,7 @@ const mapUserToDB = (u: User) => ({
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.role,
+    role: normalizeRoleIn(u.role),
     rating: u.rating,
     reviews: u.reviews,
     location: u.location,
@@ -31,12 +51,12 @@ const mapUserFromDB = (data: any): User => ({
     id: data.id,
     name: data.name || '',
     email: data.email || '',
-    role: data.role || 'FARMER',
-    rating: data.rating || 0,
-    reviews: data.reviews || 0,
+    role: normalizeRoleOut(data.role),
+    rating: Number(data.rating || 0),
+    reviews: Number(data.reviews || 0),
     location: data.location || '',
     avatarUrl: data.avatar_url || '',
-    walletBalance: data.wallet_balance || 0,
+    walletBalance: Number(data.wallet_balance || 0),
     lat: data.lat,
     lng: data.lng,
     farmSize: data.farm_size,
@@ -64,8 +84,8 @@ const mapProduceFromDB = (data: any): Produce => ({
     farmerName: data.farmer_name || '',
     name: data.name || '',
     type: data.type || '',
-    quantity: data.quantity || 0,
-    pricePerKg: data.price_per_kg || 0,
+    quantity: Number(data.quantity || 0),
+    pricePerKg: Number(data.price_per_kg || 0),
     location: data.location || '',
     imageUrl: data.image_url || '',
     description: data.description || '',
@@ -108,8 +128,8 @@ const mapContractFromDB = (data: any): Contract => ({
     vendorId: data.vendor_id,
     farmerName: data.farmer_name || '',
     vendorName: data.vendor_name || '',
-    quantity: data.quantity || 0,
-    totalPrice: data.total_price || 0,
+    quantity: Number(data.quantity || 0),
+    totalPrice: Number(data.total_price || 0),
     deliveryDeadline: data.delivery_deadline,
     paymentDate: data.payment_date,
     status: data.status,
@@ -135,7 +155,7 @@ const mapTransactionFromDB = (data: any): Transaction => ({
     id: data.id,
     userId: data.user_id,
     type: data.type,
-    amount: data.amount,
+    amount: Number(data.amount),
     description: data.description || '',
     date: data.date,
     relatedContractId: undefined 
@@ -270,7 +290,7 @@ export const addProduce = async (newProduce: Produce): Promise<Produce> => {
             .eq('id', user.id)
             .single();
         if (profileError || !profile) throw new Error("User profile not found. Please re-login.");
-        if (profile.role !== 'FARMER') throw new Error("Only FARMER accounts can list produce.");
+        if (normalizeRoleOut(profile.role) !== UserRole.FARMER) throw new Error("Only FARMER accounts can list produce.");
 
         const dbProduce = mapProduceToDB(newProduce);
 
