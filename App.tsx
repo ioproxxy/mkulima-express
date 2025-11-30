@@ -29,6 +29,7 @@ const MinusIcon = ({ className }: { className?: string }) => <svg xmlns="http://
 const BarChartIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><line x1="12" x2="12" y1="20" y2="10" /><line x1="18" x2="18" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="16" /></svg>;
 const MessageSquareIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>;
 const QrCodeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className={className}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><line x1="14" x2="14.01" y1="14" y2="14"></line><line x1="17" x2="21" y1="14" y2="14"></line><line x1="14" x2="14" y1="17" y2="21"></line><line x1="17" x2="17" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="17" y2="17.01"></line><line x1="21" x2="21" y1="21" y2="21.01"></line></svg>;
+const RefreshCwIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>;
 
 
 // --- UI COMPONENTS --- //
@@ -81,6 +82,91 @@ const TransactionItem: React.FC<{ transaction: Transaction }> = ({ transaction }
     );
 }
 
+const QRCodeDisplay = ({ value }: { value: string }) => (
+    <div className="flex flex-col items-center justify-center bg-white p-4 rounded-lg shadow-md mt-4">
+        <p className="text-sm font-semibold text-gray-600 mb-2">Scan for Logistics</p>
+        <img 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${value}`} 
+            alt="Contract QR Code" 
+            className="w-32 h-32"
+        />
+        <p className="text-xs text-gray-400 mt-2">ID: {value.slice(0, 8)}...</p>
+    </div>
+);
+
+const ActionCenter = ({ user, contracts }: { user: User, contracts: Contract[] }) => {
+    const navigate = useNavigate();
+    
+    const actions = useMemo(() => {
+        const list: { id: string, title: string, desc: string, link: string, color: string }[] = [];
+        
+        // 1. Pending Offers (Received)
+        contracts
+            .filter(c => c.status === ContractStatus.PENDING && c.createdBy !== user.id && (c.farmerId === user.id || c.vendorId === user.id))
+            .forEach(c => {
+                list.push({
+                    id: c.id,
+                    title: 'Review Offer',
+                    desc: `${c.produceName} - ${c.quantity}kg`,
+                    link: `/contracts/${c.id}`,
+                    color: 'bg-blue-100 text-blue-800'
+                });
+            });
+
+        // 2. Vendor Actions
+        if (user.role === UserRole.VENDOR) {
+            contracts
+                .filter(c => c.status === ContractStatus.ACTIVE && c.vendorId === user.id)
+                .forEach(c => {
+                    list.push({
+                         id: c.id,
+                         title: 'Confirm Delivery',
+                         desc: `For ${c.produceName}`,
+                         link: `/contracts/${c.id}`,
+                         color: 'bg-yellow-100 text-yellow-800'
+                    });
+                });
+            
+             contracts
+                .filter(c => c.status === ContractStatus.DELIVERY_CONFIRMED && c.vendorId === user.id)
+                .forEach(c => {
+                    list.push({
+                         id: c.id,
+                         title: 'Release Payment',
+                         desc: `For ${c.produceName}`,
+                         link: `/contracts/${c.id}`,
+                         color: 'bg-green-100 text-green-800'
+                    });
+                });
+        }
+        
+        return list;
+    }, [contracts, user]);
+
+    if (actions.length === 0) return null;
+
+    return (
+        <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Action Center</h3>
+            <div className="space-y-3">
+                {actions.map(action => (
+                    <div 
+                        key={action.id} 
+                        onClick={() => navigate(action.link)}
+                        className={`p-4 rounded-lg shadow-sm flex justify-between items-center cursor-pointer ${action.color} border border-opacity-20 border-current`}
+                    >
+                        <div>
+                            <p className="font-bold">{action.title}</p>
+                            <p className="text-sm opacity-80">{action.desc}</p>
+                        </div>
+                        <ChevronLeftIcon className="w-5 h-5 transform rotate-180" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 // --- DATA CONTEXT --- //
 interface DataContextType {
   users: User[];
@@ -91,8 +177,9 @@ interface DataContextType {
   loading: boolean;
   updateUser: (updatedUser: User) => Promise<void>;
   updateContract: (updatedContract: Contract) => Promise<void>;
-  addContract: (newContract: Contract) => Promise<void>;
+  addContract: (newContract: Contract) => Promise<Contract>;
   addProduce: (newProduce: Produce) => Promise<void>;
+  deleteProduce: (produceId: string) => Promise<void>;
   addUser: (newUser: User) => Promise<User>;
   addTransaction: (newTransaction: Transaction) => Promise<void>;
   addMessage: (newMessage: Message) => Promise<void>;
@@ -133,6 +220,44 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     loadData();
+
+    // -- Realtime Subscriptions -- //
+    
+    // Subscribe to new messages
+    const messageSubscription = supabase
+        .channel('public:messages')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+             const newMessage = api.mapMessageFromDB(payload.new);
+             setMessages(prev => {
+                // Prevent duplicates if already added locally
+                if (prev.find(m => m.id === newMessage.id)) return prev;
+                return [...prev, newMessage];
+             });
+        })
+        .subscribe();
+
+    // Subscribe to contract updates
+    const contractSubscription = supabase
+        .channel('public:contracts')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'contracts' }, (payload) => {
+            if (payload.eventType === 'INSERT') {
+                const newContract = api.mapContractFromDB(payload.new);
+                setContracts(prev => {
+                    // Prevent duplicates if already added locally
+                    if (prev.find(c => c.id === newContract.id)) return prev;
+                    return [newContract, ...prev];
+                });
+            } else if (payload.eventType === 'UPDATE') {
+                const updatedContract = api.mapContractFromDB(payload.new);
+                setContracts(prev => prev.map(c => c.id === updatedContract.id ? updatedContract : c));
+            }
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(messageSubscription);
+        supabase.removeChannel(contractSubscription);
+    };
   }, []);
 
   const updateUser = async (updatedUser: User) => {
@@ -142,17 +267,25 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   const updateContract = async (updatedContract: Contract) => {
     await api.updateContract(updatedContract);
+    // Optimistic UI update
     setContracts(prevContracts => prevContracts.map(c => c.id === updatedContract.id ? updatedContract : c));
   };
   
-  const addContract = async (newContract: Contract) => {
+  const addContract = async (newContract: Contract): Promise<Contract> => {
     const savedContract = await api.addContract(newContract);
+    // Optimistic update for immediate feedback
     setContracts(prev => [savedContract, ...prev]);
+    return savedContract;
   };
 
   const addProduce = async (newProduce: Produce) => {
     const savedProduce = await api.addProduce(newProduce);
     setProduce(prev => [savedProduce, ...prev]);
+  }
+
+  const deleteProduce = async (produceId: string) => {
+      await api.deleteProduce(produceId);
+      setProduce(prev => prev.filter(p => p.id !== produceId));
   }
 
   const addUser = async (newUser: User): Promise<User> => {
@@ -168,12 +301,13 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   const addMessage = async (newMessage: Message) => {
     const savedMessage = await api.addMessage(newMessage);
+    // Optimistic update
     setMessages(prev => [...prev, savedMessage]);
   };
 
   const value = useMemo(() => ({
     users, produce, contracts, transactions, messages, loading,
-    updateUser, updateContract, addContract, addProduce, addUser, addTransaction, addMessage, refreshData: loadData
+    updateUser, updateContract, addContract, addProduce, deleteProduce, addUser, addTransaction, addMessage, refreshData: loadData
   }), [users, produce, contracts, transactions, messages, loading]);
 
   return (
@@ -298,6 +432,11 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     }
 
     if (data.user && data.session) {
+        // Generate random coordinates within Kenya for demo purposes
+        // Bounds: Lat (-4 to 4), Lng (34 to 41)
+        const lat = -1.2921 + (Math.random() - 0.5) * 4;
+        const lng = 36.8219 + (Math.random() - 0.5) * 4;
+
         // User created and session active (email confirmation likely off or not required immediately)
         const newUser: User = {
             id: data.user.id, // Use the Auth ID
@@ -311,6 +450,8 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
             reviews: 0,
             avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
             walletBalance: 0,
+            lat: lat,
+            lng: lng,
         };
         
         try {
@@ -345,9 +486,14 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    notify("Logged out successfully", "info");
+    try {
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Error signing out:", error);
+    } finally {
+        setUser(null);
+        notify("Logged out successfully", "info");
+    }
   };
 
   const value = useMemo(() => ({ user, login, logout, register, loading }), [user, loading]);
@@ -410,6 +556,7 @@ const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { notify } = useNotifier();
+  const { deleteProduce } = useData();
 
   const handleMakeOffer = () => {
     navigate(`/produce/${produce.id}/new-contract`);
@@ -419,11 +566,31 @@ const ProduceCard: React.FC<{ produce: Produce }> = ({ produce }) => {
     navigate(`/my-produce/${produce.id}/new-contract`);
   };
 
+  const handleDelete = async () => {
+      if(window.confirm("Are you sure you want to delete this listing?")) {
+          try {
+              await deleteProduce(produce.id);
+              notify("Produce deleted successfully.", "success");
+          } catch (error) {
+              notify("Failed to delete produce.", "error");
+          }
+      }
+  }
+
   const isMyProduce = user?.id === produce.farmerId;
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300">
+    <div className="bg-white rounded-lg shadow-md overflow-hidden transform hover:scale-105 transition-transform duration-300 relative">
       <img src={produce.imageUrl} alt={produce.name} className="w-full h-48 object-cover" />
+       {user?.role === UserRole.FARMER && isMyProduce && (
+          <button 
+              onClick={handleDelete}
+              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md"
+              title="Delete Listing"
+          >
+              <Trash2Icon className="w-4 h-4" />
+          </button>
+      )}
       <div className="p-4">
         <h3 className="text-lg font-bold text-gray-800">{produce.name}</h3>
         <p className="text-sm text-gray-500">{produce.type}</p>
@@ -525,7 +692,7 @@ const MapView: React.FC<{ users: User[]; currentUserId?: string }> = ({ users, c
                         className="absolute group"
                         style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -100%)' }}
                     >
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                           {user.name} {isCurrentUser && '(You)'} <br/> ({(user.location || '').split(',')[0]})
                         </div>
                         <MapPinIcon className={`w-8 h-8 ${isCurrentUser ? 'text-blue-500' : isFarmer ? 'text-green-600' : 'text-amber-500'} drop-shadow-lg`} />
@@ -777,9 +944,7 @@ const AdminLoginScreen = () => {
         setIsLoading(false);
 
         if (success) {
-            // Role check happens after login in AuthContext/useEffect, or here if we wait.
-            // But since login redirects via useEffect above, we might just let it happen.
-            // Ideally we check role BEFORE full redirect, but user is null until auth state changes.
+            // Role check happens after login in AuthContext/useEffect
         } else {
             setError('Invalid credentials.');
         }
@@ -1050,7 +1215,14 @@ const VendorRegistrationScreen = () => {
 
 const DashboardScreen = () => {
   const { user } = useAuth();
-  const { contracts, produce, users } = useData();
+  const { contracts, produce, users, refreshData } = useData();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+      setIsRefreshing(true);
+      await refreshData();
+      setIsRefreshing(false);
+  }
 
   if (!user) return null;
 
@@ -1064,8 +1236,16 @@ const DashboardScreen = () => {
     <Layout>
       <Header title="Dashboard" />
       <div className="p-4">
-        <h2 className="text-2xl font-semibold text-gray-700 mb-4">{greeting}</h2>
+        <div className="flex justify-between items-center mb-4">
+             <h2 className="text-2xl font-semibold text-gray-700">{greeting}</h2>
+             <button onClick={handleRefresh} className={`p-2 bg-white rounded-full shadow-sm hover:shadow-md ${isRefreshing ? 'animate-spin' : ''}`}>
+                 <RefreshCwIcon className="w-5 h-5 text-gray-600"/>
+             </button>
+        </div>
         
+        {/* Action Center - Immediate Tasks */}
+        <ActionCenter user={user} contracts={contracts} />
+
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow-md text-center">
@@ -1326,6 +1506,68 @@ const ContractsScreen = () => {
   );
 };
 
+const StatusTimeline = ({ statusHistory }: { statusHistory: { status: ContractStatus, timestamp: string }[] }) => {
+    // A simplified visual timeline
+    const allStatuses = [
+        ContractStatus.PENDING,
+        ContractStatus.ACTIVE,
+        ContractStatus.DELIVERY_CONFIRMED,
+        ContractStatus.PAYMENT_RELEASED
+    ];
+
+    const currentStatus = statusHistory[statusHistory.length - 1].status;
+    const currentIndex = allStatuses.indexOf(currentStatus);
+    const isCancelledOrDisputed = currentStatus === ContractStatus.CANCELLED || currentStatus === ContractStatus.DISPUTED;
+
+    if (isCancelledOrDisputed) return null; // Don't show standard timeline for these states
+
+    return (
+        <div className="flex items-center justify-between mb-6 px-2 relative">
+             {/* Progress Bar Background */}
+             <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 -z-10 mx-4"></div>
+             {/* Active Progress Bar */}
+             <div className="absolute top-1/2 left-0 h-1 bg-green-500 -z-10 mx-4 transition-all duration-500" 
+                  style={{ width: `${(Math.max(0, currentIndex) / (allStatuses.length - 1)) * 100}%` }}></div>
+
+             {allStatuses.map((s, idx) => {
+                 const isCompleted = idx <= currentIndex;
+                 return (
+                     <div key={s} className="flex flex-col items-center">
+                         <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors duration-300 ${isCompleted ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-400'}`}>
+                             {isCompleted ? <CheckCircleIcon className="w-4 h-4" /> : idx + 1}
+                         </div>
+                         <p className={`text-[10px] mt-1 font-medium ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
+                             {s.replace('_', ' ')}
+                         </p>
+                     </div>
+                 );
+             })}
+        </div>
+    );
+};
+
+const DisputeModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (reason: string) => void }) => {
+    const [reason, setReason] = useState('');
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm p-6">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Raise a Dispute</h3>
+                <textarea
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    placeholder="Describe the issue with this order..."
+                    className="w-full p-2 border rounded-md mb-4 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    rows={4}
+                />
+                <div className="flex justify-end space-x-2">
+                    <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md">Cancel</button>
+                    <button onClick={() => onSubmit(reason)} className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600">Submit Dispute</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const ContractDetailScreen = () => {
   const { id } = useParams();
   const { contracts, users, updateUser, updateContract, addTransaction, messages, addMessage } = useData();
@@ -1334,6 +1576,7 @@ const ContractDetailScreen = () => {
   const navigate = useNavigate();
 
   const [messageText, setMessageText] = useState('');
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const contract = contracts.find(c => c.id === id);
@@ -1348,8 +1591,17 @@ const ContractDetailScreen = () => {
     ? users.find(u => u.id === contract.vendorId)
     : users.find(u => u.id === contract.farmerId);
 
-  const handleStatusUpdate = (newStatus: ContractStatus) => {
-    let updatedContract = { ...contract, status: newStatus, statusHistory: [...contract.statusHistory, { status: newStatus, timestamp: new Date().toISOString() }]};
+  const handleStatusUpdate = (newStatus: ContractStatus, additionalData?: any) => {
+    let updatedContract: Contract = { 
+        ...contract, 
+        status: newStatus, 
+        statusHistory: [...contract.statusHistory, { status: newStatus, timestamp: new Date().toISOString() }]
+    };
+
+    if (newStatus === ContractStatus.DISPUTED && additionalData) {
+        updatedContract.disputeReason = additionalData.reason;
+        updatedContract.disputeFiledBy = user?.id;
+    }
     
     // Logic for payment release when status becomes PAYMENT_RELEASED
     if (newStatus === ContractStatus.PAYMENT_RELEASED) {
@@ -1396,6 +1648,15 @@ const ContractDetailScreen = () => {
     notify(`Contract status updated to ${newStatus}`, "success");
   };
 
+  const handleDisputeSubmit = (reason: string) => {
+      if (!reason.trim()) {
+          notify("Please provide a reason for the dispute.", "warning");
+          return;
+      }
+      handleStatusUpdate(ContractStatus.DISPUTED, { reason });
+      setShowDisputeModal(false);
+  };
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageText.trim() || !user) return;
@@ -1412,15 +1673,15 @@ const ContractDetailScreen = () => {
   }
 
   const contractMessages = messages.filter(m => m.contractId === contract.id).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-  // Determine if current user is the creator.
-  // We rely on contract.createdBy which is now fetched from logistics payload in api.ts
   const isCreator = user?.id === contract.createdBy;
 
   return (
     <Layout>
       <Header title="Contract Details" showBack={true} />
       <div className="p-4 space-y-6">
+        {/* Status Timeline */}
+        <StatusTimeline statusHistory={contract.statusHistory} />
+
         {/* Contract Info */}
         <div className="bg-white p-4 rounded-lg shadow-md">
           <div className="flex justify-between items-start mb-4">
@@ -1432,6 +1693,12 @@ const ContractDetailScreen = () => {
               {contract.status}
             </span>
           </div>
+          {contract.status === ContractStatus.DISPUTED && (
+              <div className="bg-orange-50 border-l-4 border-orange-500 p-3 mb-4 rounded-md">
+                  <p className="text-sm font-bold text-orange-800">Dispute Filed</p>
+                  <p className="text-sm text-orange-700">{contract.disputeReason}</p>
+              </div>
+          )}
           <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
             <InfoItem label="Quantity" value={`${contract.quantity} kg`} />
             <InfoItem label="Total Price" value={`KES ${contract.totalPrice.toLocaleString()}`} />
@@ -1441,12 +1708,17 @@ const ContractDetailScreen = () => {
             {contract.paymentDate && <InfoItem label="Paid On" value={contract.paymentDate} />}
           </div>
         </div>
+        
+        {/* Logistics - QR Code */}
+        {(contract.status === ContractStatus.ACTIVE || contract.status === ContractStatus.DELIVERY_CONFIRMED) && (
+            <QRCodeDisplay value={contract.id} />
+        )}
 
         {/* Action Buttons */}
         <div className="bg-white p-4 rounded-lg shadow-md">
           <h3 className="font-semibold text-gray-800 mb-3 text-center">Contract Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-             {/* Pending Actions: Accept or Reject/Cancel */}
+             {/* Pending Actions */}
              {contract.status === ContractStatus.PENDING && (
                 <>
                   {!isCreator ? (
@@ -1475,49 +1747,32 @@ const ContractDetailScreen = () => {
                 </>
              )}
 
-             {/* Active Actions: Confirm Delivery (Vendor only) */}
+             {/* Active Actions */}
              {contract.status === ContractStatus.ACTIVE && user?.role === UserRole.VENDOR && (
               <button onClick={() => handleStatusUpdate(ContractStatus.DELIVERY_CONFIRMED)} className="bg-yellow-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-yellow-600 col-span-2 shadow-sm">
                 Confirm Delivery
               </button>
             )}
 
-            {/* Delivery Confirmed Actions: Release Payment (Vendor only) */}
+            {/* Delivery Confirmed Actions */}
              {contract.status === ContractStatus.DELIVERY_CONFIRMED && user?.role === UserRole.VENDOR && (
               <button onClick={() => handleStatusUpdate(ContractStatus.PAYMENT_RELEASED)} className="bg-green-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-green-600 col-span-2 shadow-sm">
                 Release Payment
               </button>
             )}
 
-            <button onClick={() => notify("Dispute resolution feature coming soon.", "info")} className="bg-orange-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-orange-600 col-span-2 shadow-sm">
-              Raise Dispute
-            </button>
+            {contract.status !== ContractStatus.COMPLETED && contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.DISPUTED && contract.status !== ContractStatus.PAYMENT_RELEASED && (
+                 <button onClick={() => setShowDisputeModal(true)} className="bg-orange-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-orange-600 col-span-2 shadow-sm">
+                    Raise Dispute
+                </button>
+            )}
+            
+            {(contract.status === ContractStatus.COMPLETED || contract.status === ContractStatus.PAYMENT_RELEASED || contract.status === ContractStatus.CANCELLED) && (
+                <p className="col-span-2 text-center text-sm text-gray-500">No further actions available.</p>
+            )}
           </div>
         </div>
 
-        {/* Logistics */}
-        {contract.logistics && (
-          <div className="bg-white p-4 rounded-lg shadow-md">
-            <h3 className="font-semibold text-gray-800 mb-3 flex items-center"><TruckIcon className="w-5 h-5 mr-2" /> Logistics Details</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-                <InfoItem label="Partner" value={contract.logistics.partner} />
-                <InfoItem label="Status" value={contract.logistics.status} />
-                {contract.logistics.pickupTime && <InfoItem label="Pickup Time" value={new Date(contract.logistics.pickupTime).toLocaleString()} />}
-                {contract.logistics.deliveryTime && <InfoItem label="Delivery Time" value={new Date(contract.logistics.deliveryTime).toLocaleString()} />}
-            </div>
-            <div className="mt-4 flex justify-around">
-                <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Pickup QR Code</p>
-                    <QrCodeIcon className="w-16 h-16 text-gray-700" />
-                </div>
-                <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-1">Delivery QR Code</p>
-                    <QrCodeIcon className="w-16 h-16 text-gray-700" />
-                </div>
-            </div>
-          </div>
-        )}
-        
         {/* Messaging */}
         <div className="bg-white rounded-lg shadow-md">
             <h3 className="font-semibold text-gray-800 p-4 border-b flex items-center"><MessageSquareIcon className="w-5 h-5 mr-2" /> Chat with {otherParty?.name}</h3>
@@ -1546,6 +1801,7 @@ const ContractDetailScreen = () => {
             </form>
         </div>
       </div>
+      {showDisputeModal && <DisputeModal onClose={() => setShowDisputeModal(false)} onSubmit={handleDisputeSubmit} />}
     </Layout>
   );
 };
@@ -1553,29 +1809,83 @@ const ContractDetailScreen = () => {
 
 const ProfileScreen = () => {
     const { user, logout } = useAuth();
+    const { updateUser } = useData();
+    const { notify } = useNotifier();
+    
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState({ name: '', location: '', farmSize: '', businessName: '' });
+
+    useEffect(() => {
+        if (user) {
+            setEditForm({
+                name: user.name,
+                location: user.location,
+                farmSize: user.farmSize || '',
+                businessName: user.businessName || ''
+            });
+        }
+    }, [user]);
+
     if (!user) return null;
+
+    const handleSave = async () => {
+        try {
+            const updatedUser = { ...user, ...editForm };
+            await updateUser(updatedUser);
+            setIsEditing(false);
+            notify("Profile updated successfully!", "success");
+        } catch (error) {
+            notify("Failed to update profile.", "error");
+        }
+    };
 
     return (
         <Layout>
             <Header title="My Profile" />
             <div className="p-4">
-                <div className="bg-white p-6 rounded-lg shadow-md text-center">
+                <div className="bg-white p-6 rounded-lg shadow-md text-center relative">
+                    <button 
+                        onClick={() => setIsEditing(!isEditing)} 
+                        className="absolute top-4 right-4 text-gray-500 hover:text-green-600"
+                    >
+                        {isEditing ? <XIcon className="w-6 h-6" /> : <EditIcon className="w-6 h-6" />}
+                    </button>
+
                     <img src={user.avatarUrl} alt={user.name} className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-green-200" />
-                    <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
-                    <p className={`text-sm font-semibold uppercase mt-1 ${user.role === UserRole.FARMER ? 'text-green-600' : 'text-amber-600'}`}>{user.role}</p>
-                    <div className="flex justify-center items-center mt-2">
-                        <StarIcon className="w-5 h-5 text-yellow-400 mr-1" />
-                        <span className="font-bold text-gray-700">{user.rating.toFixed(1)}</span>
-                        <span className="text-gray-500 text-sm ml-1">({user.reviews} reviews)</span>
-                    </div>
+                    
+                    {isEditing ? (
+                        <div className="space-y-3 mt-4 text-left">
+                            <InputField label="Name" name="name" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+                            <InputField label="Location" name="location" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} />
+                            {user.role === UserRole.FARMER && (
+                                <InputField label="Farm Size" name="farmSize" value={editForm.farmSize} onChange={e => setEditForm({...editForm, farmSize: e.target.value})} />
+                            )}
+                            {user.role === UserRole.VENDOR && (
+                                <InputField label="Business Name" name="businessName" value={editForm.businessName} onChange={e => setEditForm({...editForm, businessName: e.target.value})} />
+                            )}
+                            <button onClick={handleSave} className="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 mt-2">Save Changes</button>
+                        </div>
+                    ) : (
+                        <>
+                            <h2 className="text-2xl font-bold text-gray-800">{user.name}</h2>
+                            <p className={`text-sm font-semibold uppercase mt-1 ${user.role === UserRole.FARMER ? 'text-green-600' : 'text-amber-600'}`}>{user.role}</p>
+                            <div className="flex justify-center items-center mt-2">
+                                <StarIcon className="w-5 h-5 text-yellow-400 mr-1" />
+                                <span className="font-bold text-gray-700">{user.rating.toFixed(1)}</span>
+                                <span className="text-gray-500 text-sm ml-1">({user.reviews} reviews)</span>
+                            </div>
+                        </>
+                    )}
                 </div>
                 
-                <div className="bg-white p-4 rounded-lg shadow-md mt-6 text-sm">
-                    <ProfileInfoItem icon={UserIcon} label="Email" value={user.email} />
-                    <ProfileInfoItem icon={MapPinIcon} label="Location" value={user.location} />
-                    {user.farmSize && <ProfileInfoItem icon={LeafIcon} label="Farm Size" value={user.farmSize} />}
-                    {user.businessName && <ProfileInfoItem icon={UsersIcon} label="Business Name" value={user.businessName} />}
-                </div>
+                {!isEditing && (
+                    <div className="bg-white p-4 rounded-lg shadow-md mt-6 text-sm">
+                        <ProfileInfoItem icon={UserIcon} label="Email" value={user.email} />
+                        <ProfileInfoItem icon={MapPinIcon} label="Location" value={user.location} />
+                        {user.farmSize && <ProfileInfoItem icon={LeafIcon} label="Farm Size" value={user.farmSize} />}
+                        {user.businessName && <ProfileInfoItem icon={UsersIcon} label="Business Name" value={user.businessName} />}
+                    </div>
+                )}
 
                 <div className="mt-6">
                     <button 
@@ -1591,19 +1901,99 @@ const ProfileScreen = () => {
     );
 };
 
+const WalletModal = ({ onClose, onTopUp, onWithdraw }: { onClose: () => void, onTopUp: (amount: number) => void, onWithdraw: (amount: number) => void }) => {
+    const [action, setAction] = useState<'topup' | 'withdraw'>('topup');
+    const [amount, setAmount] = useState('');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(amount);
+        if (val > 0) {
+            if (action === 'topup') onTopUp(val);
+            else onWithdraw(val);
+            onClose();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+             <div className="bg-white rounded-lg shadow-xl w-full max-w-xs p-6">
+                <div className="flex justify-around mb-6 border-b pb-2">
+                    <button onClick={() => setAction('topup')} className={`font-semibold pb-1 ${action === 'topup' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500'}`}>Top Up</button>
+                    <button onClick={() => setAction('withdraw')} className={`font-semibold pb-1 ${action === 'withdraw' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500'}`}>Withdraw</button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <InputField 
+                        label="Amount (KES)" 
+                        name="amount" 
+                        type="number" 
+                        value={amount} 
+                        onChange={e => setAmount(e.target.value)} 
+                        min="1"
+                        placeholder="Enter amount"
+                    />
+                    <button 
+                        type="submit" 
+                        className={`w-full mt-4 py-2 rounded-lg text-white font-semibold ${action === 'topup' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-500 hover:bg-red-600'}`}
+                    >
+                        {action === 'topup' ? 'Top Up Wallet' : 'Withdraw Funds'}
+                    </button>
+                </form>
+                 <button onClick={onClose} className="w-full mt-2 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+             </div>
+        </div>
+    )
+}
 
 const WalletScreen = () => {
-  const { user, login } = useAuth();
-  const { transactions } = useData();
+  const { user } = useAuth();
+  const { transactions, updateUser, addTransaction } = useData();
   const { notify } = useNotifier();
+  const [showModal, setShowModal] = useState(false);
 
   if(!user) return null;
 
   const userTransactions = transactions.filter(t => t.userId === user.id);
 
-  const handleAction = (action: string) => {
-    notify(`${action} feature coming soon.`, "info");
-  }
+  const handleTopUp = async (amount: number) => {
+      try {
+          const newBalance = user.walletBalance + amount;
+          await updateUser({ ...user, walletBalance: newBalance });
+          await addTransaction({
+              id: self.crypto.randomUUID(),
+              userId: user.id,
+              type: TransactionType.TOP_UP,
+              amount: amount,
+              description: "Wallet Top Up",
+              date: new Date().toISOString()
+          });
+          notify(`Successfully topped up KES ${amount}`, "success");
+      } catch (error) {
+          notify("Top up failed.", "error");
+      }
+  };
+
+  const handleWithdraw = async (amount: number) => {
+      if (amount > user.walletBalance) {
+          notify("Insufficient funds.", "error");
+          return;
+      }
+      try {
+          const newBalance = user.walletBalance - amount;
+          await updateUser({ ...user, walletBalance: newBalance });
+          await addTransaction({
+              id: self.crypto.randomUUID(),
+              userId: user.id,
+              type: TransactionType.WITHDRAWAL,
+              amount: -amount,
+              description: "Wallet Withdrawal",
+              date: new Date().toISOString()
+          });
+          notify(`Successfully withdrew KES ${amount}`, "success");
+      } catch (error) {
+          notify("Withdrawal failed.", "error");
+      }
+  };
 
   return (
     <Layout>
@@ -1613,11 +2003,8 @@ const WalletScreen = () => {
                 <p className="text-sm opacity-80">Current Balance</p>
                 <p className="text-4xl font-bold mt-1">KES {user.walletBalance.toLocaleString()}</p>
                 <div className="mt-6 grid grid-cols-2 gap-4">
-                    <button onClick={() => handleAction('Top Up')} className="bg-white bg-opacity-20 hover:bg-opacity-30 p-3 rounded-lg text-sm font-semibold flex items-center justify-center">
-                        <PlusIcon className="w-5 h-5 mr-2" /> Top Up
-                    </button>
-                    <button onClick={() => handleAction('Withdraw')} className="bg-white bg-opacity-20 hover:bg-opacity-30 p-3 rounded-lg text-sm font-semibold flex items-center justify-center">
-                        <MinusIcon className="w-5 h-5 mr-2" /> Withdraw
+                    <button onClick={() => setShowModal(true)} className="bg-white bg-opacity-20 hover:bg-opacity-30 p-3 rounded-lg text-sm font-semibold flex items-center justify-center">
+                        <PlusIcon className="w-5 h-5 mr-2" /> Manage Funds
                     </button>
                 </div>
             </div>
@@ -1632,6 +2019,7 @@ const WalletScreen = () => {
                     )}
                 </div>
             </div>
+            {showModal && <WalletModal onClose={() => setShowModal(false)} onTopUp={handleTopUp} onWithdraw={handleWithdraw} />}
         </div>
     </Layout>
   )
@@ -1647,6 +2035,7 @@ const NewContractScreen = () => {
     const selectedProduce = produce.find(p => p.id === produceId);
     const [quantity, setQuantity] = useState(1);
     const [deadline, setDeadline] = useState(new Date().toISOString().split("T")[0]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     if (!selectedProduce || !user) {
         return <Navigate to="/produce" replace />;
@@ -1655,7 +2044,7 @@ const NewContractScreen = () => {
     const farmer = users.find(u => u.id === selectedProduce.farmerId);
     const totalPrice = quantity * selectedProduce.pricePerKg;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (quantity > selectedProduce.quantity) {
             notify("Cannot offer for more than available quantity.", "error");
@@ -1666,24 +2055,32 @@ const NewContractScreen = () => {
             return;
         }
 
-        const newContract: Contract = {
-            id: self.crypto.randomUUID(),
-            produceId: selectedProduce.id,
-            produceName: selectedProduce.name,
-            farmerId: selectedProduce.farmerId,
-            vendorId: user.id,
-            farmerName: selectedProduce.farmerName,
-            vendorName: user.name,
-            quantity: quantity,
-            totalPrice: totalPrice,
-            deliveryDeadline: deadline,
-            status: ContractStatus.PENDING,
-            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-            createdBy: user.id, // Track creator
-        };
-        addContract(newContract);
-        notify("Offer submitted successfully!", "success");
-        navigate('/contracts');
+        setIsSubmitting(true);
+        try {
+            const newContract: Contract = {
+                id: self.crypto.randomUUID(),
+                produceId: selectedProduce.id,
+                produceName: selectedProduce.name,
+                farmerId: selectedProduce.farmerId,
+                vendorId: user.id,
+                farmerName: selectedProduce.farmerName,
+                vendorName: user.name,
+                quantity: quantity,
+                totalPrice: totalPrice,
+                deliveryDeadline: deadline,
+                status: ContractStatus.PENDING,
+                statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+                createdBy: user.id, // Track creator
+            };
+            const savedContract = await addContract(newContract);
+            notify("Offer submitted successfully!", "success");
+            // Navigate to the specific contract details to see the "Splash Card"
+            navigate(`/contracts/${savedContract.id}`);
+        } catch (error) {
+             notify("Failed to submit offer.", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -1726,9 +2123,10 @@ const NewContractScreen = () => {
                     
                     <button
                         type="submit"
-                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                        disabled={isSubmitting}
+                        className={`w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                        Submit Offer
+                        {isSubmitting ? 'Submitting...' : 'Submit Offer'}
                     </button>
                 </form>
             </div>
@@ -1748,6 +2146,7 @@ const FarmerNewContractScreen = () => {
     const [vendorId, setVendorId] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [deadline, setDeadline] = useState(new Date().toISOString().split("T")[0]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const vendors = users.filter(u => u.role === UserRole.VENDOR);
 
@@ -1763,7 +2162,7 @@ const FarmerNewContractScreen = () => {
 
     const totalPrice = quantity * selectedProduce.pricePerKg;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!vendorId) {
             notify("Please select a vendor.", "error");
@@ -1784,24 +2183,31 @@ const FarmerNewContractScreen = () => {
             return;
         }
 
-        const newContract: Contract = {
-            id: self.crypto.randomUUID(),
-            produceId: selectedProduce.id,
-            produceName: selectedProduce.name,
-            farmerId: user.id,
-            vendorId: selectedVendor.id,
-            farmerName: user.name,
-            vendorName: selectedVendor.name,
-            quantity: quantity,
-            totalPrice: totalPrice,
-            deliveryDeadline: deadline,
-            status: ContractStatus.PENDING,
-            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-            createdBy: user.id, // Track creator
-        };
-        addContract(newContract);
-        notify(`Contract offer sent to ${selectedVendor.name}!`, "success");
-        navigate('/contracts');
+        setIsSubmitting(true);
+        try {
+            const newContract: Contract = {
+                id: self.crypto.randomUUID(),
+                produceId: selectedProduce.id,
+                produceName: selectedProduce.name,
+                farmerId: user.id,
+                vendorId: selectedVendor.id,
+                farmerName: user.name,
+                vendorName: selectedVendor.name,
+                quantity: quantity,
+                totalPrice: totalPrice,
+                deliveryDeadline: deadline,
+                status: ContractStatus.PENDING,
+                statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+                createdBy: user.id, // Track creator
+            };
+            const savedContract = await addContract(newContract);
+            notify(`Contract offer sent to ${selectedVendor.name}!`, "success");
+            navigate(`/contracts/${savedContract.id}`);
+        } catch (error) {
+             notify("Failed to create contract.", "error");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -1849,9 +2255,10 @@ const FarmerNewContractScreen = () => {
                     
                     <button
                         type="submit"
-                        className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        disabled={isSubmitting}
+                        className={`w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                     >
-                        Send Contract Offer
+                        {isSubmitting ? 'Sending...' : 'Send Contract Offer'}
                     </button>
                 </form>
             </div>

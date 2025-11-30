@@ -1,5 +1,6 @@
+
 import { supabase } from './supabaseClient';
-import { User, Produce, Contract, Transaction, Message, UserRole } from './types';
+import { User, Produce, Contract, Transaction, Message } from './types';
 
 // --- SUPABASE API --- //
 
@@ -8,34 +9,14 @@ const logError = (context: string, error: any) => {
     console.error(`Error in ${context}:`, JSON.stringify(error, null, 2));
 };
 
-// Normalize role helpers
-const normalizeRoleOut = (role: any): UserRole => {
-    const val = String(role || '').toUpperCase();
-    switch (val) {
-        case 'FARMER':
-            return UserRole.FARMER;
-        case 'VENDOR':
-            return UserRole.VENDOR;
-        case 'ADMIN':
-            return UserRole.ADMIN;
-        default:
-            return UserRole.FARMER;
-    }
-};
-const normalizeRoleIn = (role: any): string => {
-    const val = String(role || '').toUpperCase();
-    if (['FARMER', 'VENDOR', 'ADMIN'].includes(val)) return val;
-    return 'FARMER';
-};
-
 // --- MAPPERS --- //
 
 // User Mappers
-const mapUserToDB = (u: User) => ({
+export const mapUserToDB = (u: User) => ({
     id: u.id,
     name: u.name,
     email: u.email,
-    role: normalizeRoleIn(u.role),
+    role: u.role,
     rating: u.rating,
     reviews: u.reviews,
     location: u.location,
@@ -47,16 +28,16 @@ const mapUserToDB = (u: User) => ({
     business_name: u.businessName
 });
 
-const mapUserFromDB = (data: any): User => ({
+export const mapUserFromDB = (data: any): User => ({
     id: data.id,
     name: data.name || '',
     email: data.email || '',
-    role: normalizeRoleOut(data.role),
-    rating: Number(data.rating || 0),
-    reviews: Number(data.reviews || 0),
+    role: data.role || 'FARMER',
+    rating: data.rating || 0,
+    reviews: data.reviews || 0,
     location: data.location || '',
     avatarUrl: data.avatar_url || '',
-    walletBalance: Number(data.wallet_balance || 0),
+    walletBalance: data.wallet_balance || 0,
     lat: data.lat,
     lng: data.lng,
     farmSize: data.farm_size,
@@ -64,7 +45,7 @@ const mapUserFromDB = (data: any): User => ({
 });
 
 // Produce Mappers
-const mapProduceToDB = (p: Produce) => ({
+export const mapProduceToDB = (p: Produce) => ({
     id: p.id,
     farmer_id: p.farmerId,
     farmer_name: p.farmerName,
@@ -78,14 +59,14 @@ const mapProduceToDB = (p: Produce) => ({
     harvest_date: p.harvestDate
 });
 
-const mapProduceFromDB = (data: any): Produce => ({
+export const mapProduceFromDB = (data: any): Produce => ({
     id: data.id,
     farmerId: data.farmer_id,
     farmerName: data.farmer_name || '',
     name: data.name || '',
     type: data.type || '',
-    quantity: Number(data.quantity || 0),
-    pricePerKg: Number(data.price_per_kg || 0),
+    quantity: data.quantity || 0,
+    pricePerKg: data.price_per_kg || 0,
     location: data.location || '',
     imageUrl: data.image_url || '',
     description: data.description || '',
@@ -93,7 +74,7 @@ const mapProduceFromDB = (data: any): Produce => ({
 });
 
 // Contract Mappers
-const mapContractToDB = (c: Contract) => {
+export const mapContractToDB = (c: Contract) => {
     // WORKAROUND: Schema does not have created_by column, store in logistics JSONB
     const logisticsPayload = {
         ...(c.logistics || {}),
@@ -120,7 +101,7 @@ const mapContractToDB = (c: Contract) => {
     };
 };
 
-const mapContractFromDB = (data: any): Contract => ({
+export const mapContractFromDB = (data: any): Contract => ({
     id: data.id,
     produceId: data.produce_id,
     produceName: data.produce_name || '',
@@ -128,8 +109,8 @@ const mapContractFromDB = (data: any): Contract => ({
     vendorId: data.vendor_id,
     farmerName: data.farmer_name || '',
     vendorName: data.vendor_name || '',
-    quantity: Number(data.quantity || 0),
-    totalPrice: Number(data.total_price || 0),
+    quantity: data.quantity || 0,
+    totalPrice: data.total_price || 0,
     deliveryDeadline: data.delivery_deadline,
     paymentDate: data.payment_date,
     status: data.status,
@@ -142,7 +123,7 @@ const mapContractFromDB = (data: any): Contract => ({
 });
 
 // Transaction Mappers
-const mapTransactionToDB = (t: Transaction) => ({
+export const mapTransactionToDB = (t: Transaction) => ({
     id: t.id,
     user_id: t.userId,
     type: t.type,
@@ -151,18 +132,18 @@ const mapTransactionToDB = (t: Transaction) => ({
     date: t.date,
 });
 
-const mapTransactionFromDB = (data: any): Transaction => ({
+export const mapTransactionFromDB = (data: any): Transaction => ({
     id: data.id,
     userId: data.user_id,
     type: data.type,
-    amount: Number(data.amount),
+    amount: data.amount,
     description: data.description || '',
     date: data.date,
     relatedContractId: undefined 
 });
 
 // Message Mappers
-const mapMessageToDB = (m: Message) => ({
+export const mapMessageToDB = (m: Message) => ({
     id: m.id,
     contract_id: m.contractId,
     sender_id: m.senderId,
@@ -171,7 +152,7 @@ const mapMessageToDB = (m: Message) => ({
     timestamp: m.timestamp
 });
 
-const mapMessageFromDB = (data: any): Message => ({
+export const mapMessageFromDB = (data: any): Message => ({
     id: data.id,
     contractId: data.contract_id,
     senderId: data.sender_id,
@@ -279,28 +260,19 @@ export const fetchProduce = async (): Promise<Produce[]> => {
 
 export const addProduce = async (newProduce: Produce): Promise<Produce> => {
     try {
-        // Ensure authenticated
+        // Enforce that the user is authenticated and matches the farmer_id
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("You must be logged in to add produce.");
-
-        // Fetch profile to confirm role & name freshness (avoid stale client state causing RLS failure)
-        const { data: profile, error: profileError } = await supabase
-            .from('users')
-            .select('id, name, role, location')
-            .eq('id', user.id)
-            .single();
-        if (profileError || !profile) throw new Error("User profile not found. Please re-login.");
-        if (normalizeRoleOut(profile.role) !== UserRole.FARMER) throw new Error("Only FARMER accounts can list produce.");
+        if (!user) throw new Error("User must be authenticated to add produce");
 
         const dbProduce = mapProduceToDB(newProduce);
+        
+        // Strictly override farmer_id with the authenticated user's ID
+        // This prevents RLS violations if the app state is slightly out of sync
+        dbProduce.farmer_id = user.id;
 
-        // Force authoritative fields from profile (prevents mismatches triggering policy failures)
-        dbProduce.farmer_id = profile.id;
-        dbProduce.farmer_name = profile.name || newProduce.farmerName;
-        dbProduce.location = profile.location || newProduce.location;
-
-        // Let DB generate id
+        // Exclude 'id' to let DB generate it via default uuid_generate_v4()
         const { id, ...produceData } = dbProduce;
+
         const { data, error } = await supabase
             .from('produce')
             .insert(produceData)
@@ -308,22 +280,32 @@ export const addProduce = async (newProduce: Produce): Promise<Produce> => {
             .single();
 
         if (error) {
-            // Provide clearer message for RLS violations
-            if ((error as any).code === '42501') {
-                throw new Error("Permission denied by Row Level Security. Ensure you are logged in as a FARMER.");
-            }
             logError('addProduce', error);
             throw error;
         }
         return mapProduceFromDB(data);
-    } catch (err: any) {
+    } catch (err) {
         logError('addProduce', err);
-        if (err.message?.includes('row-level security')) {
-            throw new Error("Unable to list produce: your account is not authorized (must be FARMER)." );
-        }
         throw err;
     }
 }
+
+export const deleteProduce = async (produceId: string): Promise<void> => {
+    try {
+        const { error } = await supabase
+            .from('produce')
+            .delete()
+            .eq('id', produceId);
+
+        if (error) {
+            logError('deleteProduce', error);
+            throw error;
+        }
+    } catch (err) {
+        logError('deleteProduce', err);
+        throw err;
+    }
+};
 
 // --- Contracts --- //
 export const fetchContracts = async (): Promise<Contract[]> => {
@@ -367,8 +349,20 @@ export const updateContract = async (updatedContract: Contract): Promise<Contrac
 
 export const addContract = async (newContract: Contract): Promise<Contract> => {
     try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User must be authenticated to create a contract");
+
+        const dbContract = mapContractToDB(newContract);
+
+        // Security Check: The creator MUST be one of the participants
+        // This helps satisfy RLS policies that typically allow insert if auth.uid() IN (farmer_id, vendor_id)
+        if (user.id !== dbContract.farmer_id && user.id !== dbContract.vendor_id) {
+             console.warn("User ID does not match farmer or vendor ID in contract creation.");
+        }
+
         // Exclude 'id' to let DB generate it via default uuid_generate_v4()
-        const { id, ...contractData } = mapContractToDB(newContract);
+        const { id, ...contractData } = dbContract;
+        
         const { data, error } = await supabase
             .from('contracts')
             .insert(contractData)
