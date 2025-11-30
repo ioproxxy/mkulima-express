@@ -1,4 +1,3 @@
-
 import React, { useState, useContext, createContext, useMemo, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, NavLink, useNavigate, Navigate, useLocation, useParams } from 'react-router-dom';
 import { ToastContainer, toast, TypeOptions } from 'react-toastify';
@@ -40,6 +39,7 @@ const getStatusColor = (status: ContractStatus) => {
     case ContractStatus.PAYMENT_RELEASED: return 'text-purple-600 bg-purple-100';
     case ContractStatus.PENDING: return 'text-gray-600 bg-gray-100';
     case ContractStatus.DISPUTED: return 'text-orange-600 bg-orange-100';
+    case ContractStatus.CANCELLED: return 'text-red-600 bg-red-100';
     default: return 'text-red-600 bg-red-100';
   }
 };
@@ -73,7 +73,7 @@ const TransactionItem: React.FC<{ transaction: Transaction }> = ({ transaction }
                 <p className="text-xs text-gray-500">{new Date(transaction.date).toLocaleDateString()}</p>
             </div>
             <p className={`font-bold text-sm ${isCredit ? 'text-green-600' : 'text-red-600'}`}>
-               {isCredit ? '+' : ''}KES {transaction.amount.toLocaleString()}
+               {isCredit ? '+' : ''}KES {Math.abs(transaction.amount).toLocaleString()}
             </p>
         </div>
     );
@@ -1249,8 +1249,8 @@ const ContractDetailScreen = () => {
   const handleStatusUpdate = (newStatus: ContractStatus) => {
     let updatedContract = { ...contract, status: newStatus, statusHistory: [...contract.statusHistory, { status: newStatus, timestamp: new Date().toISOString() }]};
     
-    // Logic for payment release
-    if (newStatus === ContractStatus.COMPLETED) {
+    // Logic for payment release when status becomes PAYMENT_RELEASED
+    if (newStatus === ContractStatus.PAYMENT_RELEASED) {
       const farmer = users.find(u => u.id === contract.farmerId);
       const vendor = users.find(u => u.id === contract.vendorId);
       
@@ -1266,7 +1266,7 @@ const ContractDetailScreen = () => {
             userId: vendor.id,
             type: TransactionType.PAYMENT_SENT,
             amount: -contract.totalPrice,
-            description: `Payment for ${contract.produceName}`,
+            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
             date: new Date().toISOString().split('T')[0],
             relatedContractId: contract.id,
         });
@@ -1276,7 +1276,7 @@ const ContractDetailScreen = () => {
             userId: farmer.id,
             type: TransactionType.PAYMENT_RECEIVED,
             amount: contract.totalPrice,
-            description: `Payment for ${contract.produceName}`,
+            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
             date: new Date().toISOString().split('T')[0],
             relatedContractId: contract.id,
         });
@@ -1285,7 +1285,7 @@ const ContractDetailScreen = () => {
         notify("Payment successfully transferred!", "success");
 
       } else {
-        notify("Vendor has insufficient funds. Payment failed.", "error");
+        notify("Insufficient funds for payment transfer.", "error");
         return; // Don't update status if payment fails
       }
     }
@@ -1310,6 +1310,10 @@ const ContractDetailScreen = () => {
   }
 
   const contractMessages = messages.filter(m => m.contractId === contract.id).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Determine if current user is the creator.
+  // We rely on contract.createdBy which is now fetched from logistics payload in api.ts
+  const isCreator = user?.id === contract.createdBy;
 
   return (
     <Layout>
@@ -1340,16 +1344,40 @@ const ContractDetailScreen = () => {
         <div className="bg-white p-4 rounded-lg shadow-md">
           <h3 className="font-semibold text-gray-800 mb-3 text-center">Contract Actions</h3>
           <div className="grid grid-cols-2 gap-3">
-             {user?.role === UserRole.VENDOR && contract.status === ContractStatus.ACTIVE && (
-              <button onClick={() => handleStatusUpdate(ContractStatus.DELIVERY_CONFIRMED)} className="bg-yellow-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-yellow-600">
+             {/* Pending Actions: Accept or Reject/Cancel */}
+             {contract.status === ContractStatus.PENDING && (
+                <>
+                  {!isCreator ? (
+                      <>
+                        <button onClick={() => handleStatusUpdate(ContractStatus.ACTIVE)} className="bg-blue-600 text-white p-2 rounded-lg text-sm font-semibold hover:bg-blue-700">
+                            Accept Offer
+                        </button>
+                        <button onClick={() => handleStatusUpdate(ContractStatus.CANCELLED)} className="bg-red-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-red-600">
+                            Decline Offer
+                        </button>
+                      </>
+                  ) : (
+                       <button onClick={() => handleStatusUpdate(ContractStatus.CANCELLED)} className="bg-red-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-red-600 col-span-2">
+                            Cancel Offer
+                       </button>
+                  )}
+                </>
+             )}
+
+             {/* Active Actions: Confirm Delivery (Vendor only) */}
+             {contract.status === ContractStatus.ACTIVE && user?.role === UserRole.VENDOR && (
+              <button onClick={() => handleStatusUpdate(ContractStatus.DELIVERY_CONFIRMED)} className="bg-yellow-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-yellow-600 col-span-2">
                 Confirm Delivery
               </button>
             )}
-             {user?.role === UserRole.FARMER && contract.status === ContractStatus.DELIVERY_CONFIRMED && (
-              <button onClick={() => handleStatusUpdate(ContractStatus.COMPLETED)} className="bg-green-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-green-600">
+
+            {/* Delivery Confirmed Actions: Release Payment (Vendor only) */}
+             {contract.status === ContractStatus.DELIVERY_CONFIRMED && user?.role === UserRole.VENDOR && (
+              <button onClick={() => handleStatusUpdate(ContractStatus.PAYMENT_RELEASED)} className="bg-green-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-green-600 col-span-2">
                 Release Payment
               </button>
             )}
+
             <button onClick={() => notify("Dispute resolution feature coming soon.", "info")} className="bg-orange-500 text-white p-2 rounded-lg text-sm font-semibold hover:bg-orange-600 col-span-2">
               Raise Dispute
             </button>
@@ -1540,6 +1568,7 @@ const NewContractScreen = () => {
             deliveryDeadline: deadline,
             status: ContractStatus.PENDING,
             statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+            createdBy: user.id, // Track creator
         };
         addContract(newContract);
         notify("Offer submitted successfully!", "success");
@@ -1657,6 +1686,7 @@ const FarmerNewContractScreen = () => {
             deliveryDeadline: deadline,
             status: ContractStatus.PENDING,
             statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+            createdBy: user.id, // Track creator
         };
         addContract(newContract);
         notify(`Contract offer sent to ${selectedVendor.name}!`, "success");

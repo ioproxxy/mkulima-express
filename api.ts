@@ -74,24 +74,32 @@ const mapProduceFromDB = (data: any): Produce => ({
 });
 
 // Contract Mappers
-const mapContractToDB = (c: Contract) => ({
-    id: c.id,
-    produce_id: c.produceId,
-    produce_name: c.produceName,
-    farmer_id: c.farmerId,
-    vendor_id: c.vendorId,
-    farmer_name: c.farmerName,
-    vendor_name: c.vendorName,
-    quantity: c.quantity,
-    total_price: c.totalPrice,
-    delivery_deadline: c.deliveryDeadline,
-    payment_date: c.paymentDate,
-    status: c.status,
-    status_history: c.statusHistory,
-    dispute_reason: c.disputeReason,
-    dispute_filed_by: c.disputeFiledBy,
-    logistics: c.logistics
-});
+const mapContractToDB = (c: Contract) => {
+    // WORKAROUND: Schema does not have created_by column, store in logistics JSONB
+    const logisticsPayload = {
+        ...(c.logistics || {}),
+        created_by_user_id: c.createdBy
+    };
+
+    return {
+        id: c.id,
+        produce_id: c.produceId,
+        produce_name: c.produceName,
+        farmer_id: c.farmerId,
+        vendor_id: c.vendorId,
+        farmer_name: c.farmerName,
+        vendor_name: c.vendorName,
+        quantity: c.quantity,
+        total_price: c.totalPrice,
+        delivery_deadline: c.deliveryDeadline,
+        payment_date: c.paymentDate,
+        status: c.status,
+        status_history: c.statusHistory,
+        dispute_reason: c.disputeReason,
+        dispute_filed_by: c.disputeFiledBy,
+        logistics: logisticsPayload, // Store createdBy here
+    };
+};
 
 const mapContractFromDB = (data: any): Contract => ({
     id: data.id,
@@ -109,7 +117,9 @@ const mapContractFromDB = (data: any): Contract => ({
     statusHistory: data.status_history || [],
     disputeReason: data.dispute_reason,
     disputeFiledBy: data.dispute_filed_by,
-    logistics: data.logistics
+    logistics: data.logistics,
+    // Read createdBy from logistics if not in top level column
+    createdBy: data.created_by || data.logistics?.created_by_user_id || '' 
 });
 
 // Transaction Mappers
@@ -120,7 +130,7 @@ const mapTransactionToDB = (t: Transaction) => ({
     amount: t.amount,
     description: t.description,
     date: t.date,
-    related_contract_id: t.relatedContractId
+    // related_contract_id: t.relatedContractId // Schema does not have this column, removing to prevent error
 });
 
 const mapTransactionFromDB = (data: any): Transaction => ({
@@ -130,7 +140,7 @@ const mapTransactionFromDB = (data: any): Transaction => ({
     amount: data.amount,
     description: data.description,
     date: data.date,
-    relatedContractId: data.related_contract_id
+    relatedContractId: undefined // Not available in this schema
 });
 
 // Message Mappers
