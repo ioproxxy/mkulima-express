@@ -1052,9 +1052,596 @@ const DashboardScreen = () => {
   );
 };
 
+// --- INPUT FIELD COMPONENT --- //
+interface InputFieldProps {
+    label: string;
+    name: string;
+    type?: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    placeholder?: string;
+    required?: boolean;
+}
+
+const InputField: React.FC<InputFieldProps> = ({ label, name, type = 'text', value, onChange, placeholder, required = true }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <input
+            type={type}
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            required={required}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+    </div>
+);
+
 const ProduceScreen = () => {
     const { produce } = useData();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('All');
 
-    const produceTypes = ['All', ...new Set(produce.
+    const produceTypes = ['All', ...new Set(produce.map(p => p.type))];
+
+    const filteredProduce = produce.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
+                              p.farmerName.toLowerCase().includes(search.toLowerCase());
+        const matchesFilter = filter === 'All' || p.type === filter;
+        return matchesSearch && matchesFilter;
+    });
+
+    return (
+        <Layout>
+            <Header title="Available Produce" />
+            <div className="p-4">
+                <div className="mb-4 flex gap-2">
+                    <div className="flex-grow relative">
+                        <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Search produce or farmer..."
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    {produceTypes.map(type => (
+                        <button
+                            key={type}
+                            onClick={() => setFilter(type)}
+                            className={`px-4 py-1 rounded-full text-sm font-medium whitespace-nowrap ${filter === type ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            {type}
+                        </button>
+                    ))}
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                    {filteredProduce.map(p => <ProduceCard key={p.id} produce={p} />)}
+                    {filteredProduce.length === 0 && <p className="text-center text-gray-500">No produce found.</p>}
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
+const MyProduceScreen = () => {
+    const { user } = useAuth();
+    const { produce } = useData();
+    const navigate = useNavigate();
+
+    if (!user) return null;
+
+    const myProduce = produce.filter(p => p.farmerId === user.id);
+
+    return (
+        <Layout>
+            <Header title="My Produce" />
+            <div className="p-4">
+                <button
+                    onClick={() => navigate('/add-produce')}
+                    className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold mb-4 flex items-center justify-center gap-2"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                    Add New Produce
+                </button>
+                <div className="grid grid-cols-1 gap-4">
+                    {myProduce.map(p => <ProduceCard key={p.id} produce={p} />)}
+                    {myProduce.length === 0 && <p className="text-center text-gray-500 bg-white p-4 rounded-lg shadow-md">You haven't listed any produce yet.</p>}
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
+const AddProduceScreen = () => {
+    const { user } = useAuth();
+    const { addProduce } = useData();
+    const { notify } = useNotifier();
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({ name: '', type: '', quantity: '', pricePerKg: '', location: '', description: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!user) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            const newProduce: Produce = {
+                id: crypto.randomUUID(),
+                farmerId: user.id,
+                farmerName: user.name,
+                name: formData.name,
+                type: formData.type,
+                quantity: parseFloat(formData.quantity),
+                pricePerKg: parseFloat(formData.pricePerKg),
+                location: formData.location || user.location,
+                imageUrl: `https://picsum.photos/seed/${Date.now()}/400/300`,
+                description: formData.description,
+                harvestDate: new Date().toISOString().split('T')[0],
+            };
+            await addProduce(newProduce);
+            notify('Produce added successfully!', 'success');
+            navigate('/my-produce');
+        } catch (error) {
+            notify('Failed to add produce', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title="Add Produce" showBack={true} />
+            <div className="p-4">
+                <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow-md">
+                    <InputField label="Produce Name" name="name" value={formData.name} onChange={handleChange} placeholder="e.g., Fresh Tomatoes" />
+                    <InputField label="Type" name="type" value={formData.type} onChange={handleChange} placeholder="e.g., Vegetables" />
+                    <InputField label="Quantity (kg)" name="quantity" type="number" value={formData.quantity} onChange={handleChange} />
+                    <InputField label="Price per kg (KES)" name="pricePerKg" type="number" value={formData.pricePerKg} onChange={handleChange} />
+                    <InputField label="Location" name="location" value={formData.location} onChange={handleChange} placeholder={user.location} />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                        <textarea
+                            name="description"
+                            value={formData.description}
+                            onChange={handleChange}
+                            rows={3}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            placeholder="Describe your produce..."
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold"
+                    >
+                        {isSubmitting ? 'Adding...' : 'Add Produce'}
+                    </button>
+                </form>
+            </div>
+        </Layout>
+    );
+};
+
+const ContractsScreen = () => {
+    const { user } = useAuth();
+    const { contracts } = useData();
+    const [filter, setFilter] = useState<ContractStatus | 'All'>('All');
+
+    if (!user) return null;
+
+    const myContracts = contracts.filter(c => c.farmerId === user.id || c.vendorId === user.id);
+    const filteredContracts = filter === 'All' ? myContracts : myContracts.filter(c => c.status === filter);
+
+    return (
+        <Layout>
+            <Header title="Contracts" />
+            <div className="p-4">
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    {['All', ContractStatus.ACTIVE, ContractStatus.PENDING, ContractStatus.COMPLETED].map(status => (
+                        <button
+                            key={status}
+                            onClick={() => setFilter(status as ContractStatus | 'All')}
+                            className={`px-4 py-1 rounded-full text-sm font-medium whitespace-nowrap ${filter === status ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
+                        >
+                            {status}
+                        </button>
+                    ))}
+                </div>
+                {filteredContracts.map(c => <ContractCard key={c.id} contract={c} />)}
+                {filteredContracts.length === 0 && <p className="text-center text-gray-500 bg-white p-4 rounded-lg shadow-md">No contracts found.</p>}
+            </div>
+        </Layout>
+    );
+};
+
+const ContractDetailScreen = () => {
+    const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
+    const { contracts, updateContract, addTransaction, users } = useData();
+    const { notify } = useNotifier();
+    const navigate = useNavigate();
+
+    const contract = contracts.find(c => c.id === id);
+
+    if (!contract || !user) {
+        return <Layout><Header title="Contract Not Found" showBack={true} /><p className="p-4 text-center">Contract not found.</p></Layout>;
+    }
+
+    const isFarmer = user.id === contract.farmerId;
+    const isVendor = user.id === contract.vendorId;
+
+    const handleConfirmDelivery = async () => {
+        const updatedContract = { ...contract, status: ContractStatus.DELIVERY_CONFIRMED };
+        await updateContract(updatedContract);
+        notify('Delivery confirmed!', 'success');
+    };
+
+    const handleReleasePayment = async () => {
+        const updatedContract = { 
+            ...contract, 
+            status: ContractStatus.PAYMENT_RELEASED, 
+            paymentDate: new Date().toISOString().split('T')[0] 
+        };
+        await updateContract(updatedContract);
+        
+        const farmer = users.find(u => u.id === contract.farmerId);
+        if (farmer) {
+            const transaction: Transaction = {
+                id: crypto.randomUUID(),
+                userId: contract.farmerId,
+                type: TransactionType.PAYMENT_RECEIVED,
+                amount: contract.totalPrice,
+                description: `Payment for ${contract.produceName}`,
+                date: new Date().toISOString(),
+                relatedContractId: contract.id,
+            };
+            await addTransaction(transaction);
+        }
+        notify('Payment released!', 'success');
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title="Contract Details" showBack={true} />
+            <div className="p-4 space-y-4">
+                <div className="bg-white p-4 rounded-lg shadow-md">
+                    <div className="flex justify-between items-start mb-4">
+                        <h2 className="text-xl font-bold text-gray-800">{contract.produceName}</h2>
+                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(contract.status)}`}>
+                            {contract.status}
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                        <InfoItem label="Farmer" value={contract.farmerName} />
+                        <InfoItem label="Vendor" value={contract.vendorName} />
+                        <InfoItem label="Quantity" value={`${contract.quantity} kg`} />
+                        <InfoItem label="Total Price" value={`KES ${contract.totalPrice.toLocaleString()}`} />
+                        <InfoItem label="Deadline" value={contract.deliveryDeadline} />
+                        {contract.paymentDate && <InfoItem label="Paid On" value={contract.paymentDate} />}
+                    </div>
+                </div>
+
+                {isVendor && contract.status === ContractStatus.ACTIVE && (
+                    <button onClick={handleConfirmDelivery} className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold">
+                        Confirm Delivery Received
+                    </button>
+                )}
+
+                {isVendor && contract.status === ContractStatus.DELIVERY_CONFIRMED && (
+                    <button onClick={handleReleasePayment} className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold">
+                        Release Payment
+                    </button>
+                )}
+            </div>
+        </Layout>
+    );
+};
+
+const NewContractScreen = () => {
+    const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
+    const { produce, users, addContract } = useData();
+    const { notify } = useNotifier();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const isFromMyProduce = location.pathname.includes('/my-produce/');
+    const selectedProduce = produce.find(p => p.id === id);
+
+    const [vendorId, setVendorId] = useState('');
+    const [quantity, setQuantity] = useState('');
+    const [deadline, setDeadline] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!selectedProduce || !user) {
+        return <Layout showNav={false}><Header title="Create Contract" showBack={true} /><p className="p-4">Produce not found.</p></Layout>;
+    }
+
+    const vendors = users.filter(u => u.role === UserRole.VENDOR);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        const qty = parseFloat(quantity);
+        const totalPrice = qty * selectedProduce.pricePerKg;
+
+        let farmerId = selectedProduce.farmerId;
+        let farmerName = selectedProduce.farmerName;
+        let finalVendorId = isFromMyProduce ? vendorId : user.id;
+        let finalVendorName = isFromMyProduce ? (users.find(u => u.id === vendorId)?.name || 'Unknown') : user.name;
+
+        const newContract: Contract = {
+            id: crypto.randomUUID(),
+            produceId: selectedProduce.id,
+            produceName: selectedProduce.name,
+            farmerId,
+            vendorId: finalVendorId,
+            farmerName,
+            vendorName: finalVendorName,
+            quantity: qty,
+            totalPrice,
+            deliveryDeadline: deadline,
+            status: ContractStatus.PENDING,
+            statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
+        };
+
+        try {
+            await addContract(newContract);
+            notify('Contract created successfully!', 'success');
+            navigate('/contracts');
+        } catch (error) {
+            notify('Failed to create contract', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Layout showNav={false}>
+            <Header title="Create Contract" showBack={true} />
+            <div className="p-4">
+                <div className="bg-white p-4 rounded-lg shadow-md mb-4">
+                    <h3 className="font-bold text-gray-800">{selectedProduce.name}</h3>
+                    <p className="text-sm text-gray-500">KES {selectedProduce.pricePerKg}/kg</p>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow-md">
+                    {isFromMyProduce && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Select Vendor</label>
+                            <select
+                                value={vendorId}
+                                onChange={(e) => setVendorId(e.target.value)}
+                                required
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            >
+                                <option value="">Select a vendor...</option>
+                                {vendors.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <InputField label="Quantity (kg)" name="quantity" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Deadline</label>
+                        <input
+                            type="date"
+                            value={deadline}
+                            onChange={(e) => setDeadline(e.target.value)}
+                            required
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                        />
+                    </div>
+                    {quantity && (
+                        <p className="text-lg font-bold text-green-600">
+                            Total: KES {(parseFloat(quantity) * selectedProduce.pricePerKg).toLocaleString()}
+                        </p>
+                    )}
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold"
+                    >
+                        {isSubmitting ? 'Creating...' : 'Create Contract'}
+                    </button>
+                </form>
+            </div>
+        </Layout>
+    );
+};
+
+const WalletScreen = () => {
+    const { user } = useAuth();
+    const { transactions } = useData();
+
+    if (!user) return null;
+
+    const myTransactions = transactions.filter(t => t.userId === user.id);
+
+    return (
+        <Layout>
+            <Header title="Wallet" />
+            <div className="p-4">
+                <div className="bg-gradient-to-br from-green-500 to-green-700 p-6 rounded-2xl text-white mb-6 shadow-lg">
+                    <p className="text-sm opacity-90">Available Balance</p>
+                    <p className="text-4xl font-bold mt-1">KES {user.walletBalance.toLocaleString()}</p>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">Recent Transactions</h3>
+                <div className="space-y-3">
+                    {myTransactions.map(t => <TransactionItem key={t.id} transaction={t} />)}
+                    {myTransactions.length === 0 && <p className="text-center text-gray-500 bg-white p-4 rounded-lg shadow-md">No transactions yet.</p>}
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
+const InsightsScreen = () => {
+    const { user } = useAuth();
+    const { contracts, produce } = useData();
+
+    if (!user) return null;
+
+    const myContracts = contracts.filter(c => c.farmerId === user.id || c.vendorId === user.id);
+    const completedContracts = myContracts.filter(c => c.status === ContractStatus.COMPLETED || c.status === ContractStatus.PAYMENT_RELEASED);
+    const totalRevenue = completedContracts.reduce((sum, c) => sum + c.totalPrice, 0);
+
+    return (
+        <Layout>
+            <Header title="Insights" />
+            <div className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <p className="text-3xl font-bold text-green-600">{myContracts.length}</p>
+                        <p className="text-sm text-gray-500">Total Contracts</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <p className="text-3xl font-bold text-blue-600">{completedContracts.length}</p>
+                        <p className="text-sm text-gray-500">Completed</p>
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-md">
+                    <p className="text-sm text-gray-500">Total Revenue</p>
+                    <p className="text-2xl font-bold text-green-600">KES {totalRevenue.toLocaleString()}</p>
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
+const ProfileScreen = () => {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
+
+    if (!user) return null;
+
+    const handleLogout = async () => {
+        await logout();
+        navigate('/login');
+    };
+
+    return (
+        <Layout>
+            <Header title="Profile" />
+            <div className="p-4">
+                <div className="bg-white rounded-lg shadow-md p-6 mb-4">
+                    <div className="flex items-center mb-6">
+                        <img src={user.avatarUrl} alt={user.name} className="w-20 h-20 rounded-full object-cover mr-4" />
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800">{user.name}</h2>
+                            <p className="text-sm text-gray-500 capitalize">{user.role.toLowerCase()}</p>
+                            <div className="flex items-center mt-1">
+                                <StarIcon className="w-4 h-4 text-yellow-400 mr-1" />
+                                <span className="text-sm text-gray-600">{user.rating.toFixed(1)} ({user.reviews} reviews)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <ProfileInfoItem icon={UserIcon} label="Email" value={user.email} />
+                    <ProfileInfoItem icon={MapPinIcon} label="Location" value={user.location} />
+                    {user.farmSize && <ProfileInfoItem icon={LeafIcon} label="Farm Size" value={user.farmSize} />}
+                    {user.businessName && <ProfileInfoItem icon={FileTextIcon} label="Business" value={user.businessName} />}
+                </div>
+                <button
+                    onClick={handleLogout}
+                    className="w-full bg-red-500 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                >
+                    <LogOutIcon className="w-5 h-5" />
+                    Logout
+                </button>
+            </div>
+        </Layout>
+    );
+};
+
+const AdminDashboardScreen = () => {
+    const { user } = useAuth();
+    const { users, contracts, produce } = useData();
+
+    if (!user || user.role !== UserRole.ADMIN) {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    const farmers = users.filter(u => u.role === UserRole.FARMER);
+    const vendors = users.filter(u => u.role === UserRole.VENDOR);
+
+    return (
+        <Layout>
+            <Header title="Admin Dashboard" />
+            <div className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <UsersIcon className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                        <p className="text-2xl font-bold">{farmers.length}</p>
+                        <p className="text-sm text-gray-500">Farmers</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <UsersIcon className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                        <p className="text-2xl font-bold">{vendors.length}</p>
+                        <p className="text-sm text-gray-500">Vendors</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <FileTextIcon className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                        <p className="text-2xl font-bold">{contracts.length}</p>
+                        <p className="text-sm text-gray-500">Contracts</p>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-md text-center">
+                        <LeafIcon className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                        <p className="text-2xl font-bold">{produce.length}</p>
+                        <p className="text-sm text-gray-500">Produce</p>
+                    </div>
+                </div>
+            </div>
+        </Layout>
+    );
+};
+
+// --- MAIN APP COMPONENT --- //
+const App = () => {
+    return (
+        <NotificationProvider>
+            <DataProvider>
+                <AuthProvider>
+                    <HashRouter>
+                        <ToastContainer position="top-center" autoClose={3000} />
+                        <Routes>
+                            <Route path="/login" element={<LoginScreen />} />
+                            <Route path="/admin-login" element={<AdminLoginScreen />} />
+                            <Route path="/onboarding" element={<OnboardingScreen />} />
+                            <Route path="/register/farmer" element={<FarmerRegistrationScreen />} />
+                            <Route path="/register/vendor" element={<VendorRegistrationScreen />} />
+                            <Route path="/forgot-password" element={<ForgotPasswordScreen />} />
+                            
+                            <Route path="/dashboard" element={<ProtectedRoute><DashboardScreen /></ProtectedRoute>} />
+                            <Route path="/produce" element={<ProtectedRoute><ProduceScreen /></ProtectedRoute>} />
+                            <Route path="/my-produce" element={<ProtectedRoute><MyProduceScreen /></ProtectedRoute>} />
+                            <Route path="/add-produce" element={<ProtectedRoute><AddProduceScreen /></ProtectedRoute>} />
+                            <Route path="/contracts" element={<ProtectedRoute><ContractsScreen /></ProtectedRoute>} />
+                            <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetailScreen /></ProtectedRoute>} />
+                            <Route path="/produce/:id/new-contract" element={<ProtectedRoute><NewContractScreen /></ProtectedRoute>} />
+                            <Route path="/my-produce/:id/new-contract" element={<ProtectedRoute><NewContractScreen /></ProtectedRoute>} />
+                            <Route path="/wallet" element={<ProtectedRoute><WalletScreen /></ProtectedRoute>} />
+                            <Route path="/insights" element={<ProtectedRoute><InsightsScreen /></ProtectedRoute>} />
+                            <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
+                            <Route path="/admin" element={<ProtectedRoute><AdminDashboardScreen /></ProtectedRoute>} />
+                            
+                            <Route path="/" element={<Navigate to="/login" replace />} />
+                            <Route path="*" element={<Navigate to="/login" replace />} />
+                        </Routes>
+                    </HashRouter>
+                </AuthProvider>
+            </DataProvider>
+        </NotificationProvider>
+    );
+};
+
+export default App;
