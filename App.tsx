@@ -422,17 +422,20 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     setLoading(true);
     console.log(`Registering user with role: ${userData.role}`);
 
+    // Create explicit metadata object to ensure role is passed correctly for triggers
+    const metadata = {
+        full_name: userData.name,
+        role: String(userData.role), // Ensure role is string for DB enum/check
+        location: userData.location,
+        farm_size: userData.farmSize,
+        business_name: userData.businessName
+    };
+
     const { data, error } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
         options: {
-            data: {
-                full_name: userData.name,
-                role: userData.role, // Pass role in metadata so triggers can pick it up
-                location: userData.location,
-                farm_size: userData.farmSize,
-                business_name: userData.businessName
-            }
+            data: metadata
         }
     });
 
@@ -470,20 +473,15 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
             await refreshData();
         } catch (dbError: any) {
              console.error("Database Insert Error:", dbError);
-             // Error 42501: RLS Policy violation (Permission denied)
-             // Error 23505: Duplicate key (Unique violation)
              // If these occur, it usually means a trigger already created the user row, or we don't have insert permissions but might have update permissions.
-             if (dbError.code === '42501' || dbError.code === '23505') {
-                 console.log("Attempting profile update instead of insert due to existing row or policy restriction.");
-                 try {
-                     await updateUser(newUser);
-                     await refreshData();
-                 } catch (updateError) {
-                     console.error("Database Update Error:", updateError);
-                     throw updateError;
-                 }
-             } else {
-                 throw dbError;
+             // We attempt to update the profile to ensure role and other details are correct.
+             console.log("Attempting profile update instead of insert due to existing row or policy restriction.");
+             try {
+                 await updateUser(newUser);
+                 await refreshData();
+             } catch (updateError) {
+                 console.error("Database Update Error:", updateError);
+                 throw updateError;
              }
         }
     } else if (data.user && !data.session) {
@@ -509,9 +507,7 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  // Removed useMemo wrapper because logout/login/register functions are recreated on every render 
-  // (due to dependencies on other hooks/context) but were not properly included in the dependency array.
-  // This ensures consumers always get the latest valid function references.
+  // Removed useMemo wrapper to prevent stale closure issues
   const value = { user, login, logout, register, loading };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
