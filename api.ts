@@ -219,6 +219,29 @@ export const addUser = async (newUser: User): Promise<User> => {
     }
 };
 
+export const fetchUserProfile = async (userId: string): Promise<User | null> => {
+    if (!userId || typeof userId !== 'string') {
+        logError('fetchUserProfile', { message: 'Invalid userId provided' });
+        return null;
+    }
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        
+        if (error) {
+            logError('fetchUserProfile', error);
+            return null;
+        }
+        return data ? mapUserFromDB(data) : null;
+    } catch (err) {
+        logError('fetchUserProfile', err);
+        return null;
+    }
+};
+
 
 // --- Produce --- //
 export const fetchProduce = async (): Promise<Produce[]> => {
