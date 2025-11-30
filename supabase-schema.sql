@@ -108,7 +108,7 @@ CREATE POLICY "Users can insert own record" ON users FOR INSERT WITH CHECK (auth
 -- Produce policies: Anyone can read, farmers can manage their own
 CREATE POLICY "Produce is viewable by everyone" ON produce FOR SELECT USING (true);
 CREATE POLICY "Farmers can insert own produce" ON produce FOR INSERT WITH CHECK (
-  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'FARMER')
+  farmer_id = auth.uid()
 );
 CREATE POLICY "Farmers can update own produce" ON produce FOR UPDATE USING (farmer_id = auth.uid());
 CREATE POLICY "Farmers can delete own produce" ON produce FOR DELETE USING (farmer_id = auth.uid());
