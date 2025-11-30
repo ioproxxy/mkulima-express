@@ -1,5 +1,6 @@
-/* Placeholder stylesheet to satisfy import and build. TailwindCSS is loaded via CDN in index.html. */
-/* Add any global overrides below. */
+@import "tailwindcss";
+
+/* Global overrides */
 html,body { margin:0; padding:0; }
 body { -webkit-font-smoothing: antialiased; font-family: system-ui, sans-serif; }
 
