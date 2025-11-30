@@ -420,9 +420,20 @@ const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     }
     
     setLoading(true);
+    console.log(`Registering user with role: ${userData.role}`);
+
     const { data, error } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
+        options: {
+            data: {
+                full_name: userData.name,
+                role: userData.role, // Pass role in metadata so triggers can pick it up
+                location: userData.location,
+                farm_size: userData.farmSize,
+                business_name: userData.businessName
+            }
+        }
     });
 
     if (error) {
