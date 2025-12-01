@@ -12,7 +12,7 @@ interface DataContextType {
   messages: Message[];
   updateUser: (updatedUser: User) => Promise<void>;
   updateContract: (updatedContract: Contract) => Promise<void>;
-  addContract: (newContract: Contract) => Promise<void>;
+  addContract: (newContract: Contract) => Promise<Contract>;
   addProduce: (newProduce: Produce) => Promise<void>;
   addUser: (newUser: User) => Promise<User>;
   addTransaction: (newTransaction: Transaction) => Promise<void>;
@@ -100,10 +100,11 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const addContract = async (newContract: Contract) => {
+  const addContract = async (newContract: Contract): Promise<Contract> => {
     try {
       const result = await dbOperations.createContract(newContract);
       setContracts(prev => [result, ...prev]);
+      return result;
     } catch (error: any) {
       toast.error('Failed to create contract: ' + error.message);
       throw error;
