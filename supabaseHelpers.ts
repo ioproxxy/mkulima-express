@@ -202,7 +202,36 @@ export const dbOperations = {
   },
   
   async createContract(contract: any) {
+    // Get the authenticated user to ensure farmer_id/vendor_id are valid
+    const { data: authData } = await supabase.auth.getUser();
+    const authUid = authData?.user?.id;
+    if (!authUid) throw new Error('Not authenticated. Please log in first.');
+
     const base = toSnakeCase(contract);
+    
+    // Verify farmer_id by fetching the produce from database
+    // This ensures we use the actual UUID from the database, not client-provided data
+    if (base.produce_id) {
+      const { data: produceData, error: produceError } = await supabase
+        .from('produce')
+        .select('farmer_id')
+        .eq('id', base.produce_id)
+        .single();
+      
+      if (produceError) {
+        throw new Error('Invalid produce ID or produce not found');
+      }
+      
+      // Override farmer_id with the value from the database
+      base.farmer_id = produceData.farmer_id;
+    }
+    
+    // Security: Ensure the authenticated user is either the farmer or vendor
+    // The RLS policy will also enforce this, but we check here for better error messages
+    if (base.farmer_id !== authUid && base.vendor_id !== authUid) {
+      throw new Error('You must be either the farmer or vendor to create this contract');
+    }
+    
     if (!base.status_history) base.status_history = JSON.stringify([{ status: contract.status, timestamp: new Date().toISOString() }]);
     const { data, error } = await supabase
       .from('contracts')
