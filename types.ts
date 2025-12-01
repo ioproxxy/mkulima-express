@@ -73,7 +73,6 @@ export interface Contract {
   disputeReason?: string;
   disputeFiledBy?: string;
   logistics?: Logistics;
-  createdBy: string;
 }
 
 export interface Message {

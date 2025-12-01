@@ -1917,7 +1917,6 @@ const NewContractScreen = () => {
                 deliveryDeadline: deadline,
                 status: ContractStatus.PENDING,
                 statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-                createdBy: user.id, // Track creator
             };
             const savedContract = await addContract(newContract);
             notify("Offer submitted successfully!", "success");
@@ -2045,7 +2044,6 @@ const FarmerNewContractScreen = () => {
                 deliveryDeadline: deadline,
                 status: ContractStatus.PENDING,
                 statusHistory: [{ status: ContractStatus.PENDING, timestamp: new Date().toISOString() }],
-                createdBy: user.id, // Track creator
             };
             const savedContract = await addContract(newContract);
             notify(`Contract offer sent to ${selectedVendor.name}!`, "success");
