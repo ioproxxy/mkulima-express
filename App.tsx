@@ -6,6 +6,7 @@ import { User, UserRole, Produce, Contract, ContractStatus, Transaction, Transac
 import * as api from './api';
 import { supabase } from './supabaseClient';
 import { DataProvider, useData } from './contexts/DataContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // --- ICONS --- //
 const HomeIcon = ({ className }: { className?: string }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
@@ -171,202 +172,6 @@ const ActionCenter = ({ user, contracts }: { user: User, contracts: Contract[] }
 // --- DATA CONTEXT --- //
 // The canonical data context (including escrow and wallet logic) lives in
 // `contexts/DataContext.tsx` and is imported above as `DataProvider` / `useData`.
-
-// --- AUTHENTICATION CONTEXT --- //
-type UserRegistrationData = Omit<User, 'id' | 'rating' | 'reviews' | 'avatarUrl' | 'walletBalance'> & { password?: string };
-
-interface AuthContextType {
-  user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => Promise<void>;
-  register: (userData: UserRegistrationData) => Promise<void>;
-  loading: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-const AuthProvider: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { addUser, updateUser, refreshData } = useData();
-  const { notify } = useNotifier();
-
-  useEffect(() => {
-    const checkUser = async () => {
-        try {
-            const { data: { session }, error } = await supabase.auth.getSession();
-            
-            if (error) {
-                console.warn("Session check error:", error.message);
-                // If the refresh token is missing or invalid, we must clear the local session
-                if (error.message.includes("Refresh Token") || error.message.includes("Invalid Refresh Token")) {
-                    await supabase.auth.signOut();
-                }
-                setUser(null);
-                setLoading(false);
-                return;
-            }
-
-            if (session?.user) {
-                const profile = await api.fetchUserProfile(session.user.id);
-                if (profile) {
-                    setUser(profile);
-                } else {
-                    console.error("User authenticated but no profile found.");
-                    setUser(null); 
-                }
-            } else {
-                setUser(null);
-            }
-        } catch (err) {
-            console.error("Unexpected auth error:", err);
-            setUser(null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    checkUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        // Handle explicit sign-out or session expiration events
-        if (event === 'SIGNED_OUT') {
-            setUser(null);
-            setLoading(false);
-            return;
-        }
-
-        if (session?.user) {
-            const profile = await api.fetchUserProfile(session.user.id);
-            setUser(profile);
-        } else {
-            setUser(null);
-        }
-        setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-        setLoading(false);
-        console.error("Login Error:", error.message);
-        return false;
-    }
-    await refreshData();
-    // User state will be updated by onAuthStateChange
-    return true;
-  };
-
-  const register = async (userData: UserRegistrationData) => {
-    if (!userData.password) {
-        throw new Error("Password is required for registration");
-    }
-    
-    setLoading(true);
-    console.log(`Registering user with role: ${userData.role}`);
-
-    // Create explicit metadata object to ensure role is passed correctly for triggers
-    const metadata = {
-        full_name: userData.name,
-        role: String(userData.role), // Ensure role is string for DB enum/check
-        location: userData.location,
-        farm_size: userData.farmSize,
-        business_name: userData.businessName
-    };
-
-    const { data, error } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-            data: metadata
-        }
-    });
-
-    if (error) {
-        setLoading(false);
-        console.error("Registration Error:", error.message);
-        throw error;
-    }
-
-    if (data.user && data.session) {
-        // Generate random coordinates within Kenya for demo purposes
-        // Bounds: Lat (-4 to 4), Lng (34 to 41)
-        const lat = -1.2921 + (Math.random() - 0.5) * 4;
-        const lng = 36.8219 + (Math.random() - 0.5) * 4;
-
-        // User created and session active (email confirmation likely off or not required immediately)
-        const newUser: User = {
-            id: data.user.id, // Use the Auth ID
-            name: userData.name,
-            email: userData.email,
-            role: userData.role,
-            location: userData.location,
-            farmSize: userData.farmSize,
-            businessName: userData.businessName,
-            rating: 0,
-            reviews: 0,
-            avatarUrl: `https://picsum.photos/seed/${Date.now()}/200`,
-            walletBalance: 0,
-            lat: lat,
-            lng: lng,
-        };
-        
-        try {
-            await addUser(newUser);
-            await refreshData();
-        } catch (dbError: any) {
-             console.error("Database Insert Error:", dbError);
-             // If these occur, it usually means a trigger already created the user row, or we don't have insert permissions but might have update permissions.
-             // We attempt to update the profile to ensure role and other details are correct.
-             console.log("Attempting profile update instead of insert due to existing row or policy restriction.");
-             try {
-                 await updateUser(newUser);
-                 await refreshData();
-             } catch (updateError) {
-                 console.error("Database Update Error:", updateError);
-                 throw updateError;
-             }
-        }
-    } else if (data.user && !data.session) {
-        // User created but no session. Email confirmation likely required.
-        notify("Registration successful! Please check your email to verify your account.", "success");
-        setLoading(false);
-        // Do not redirect automatically as they need to verify first.
-        // Returning here prevents the auto-redirect in RegistrationScreen's useEffect
-        return; 
-    }
-  };
-
-  const logout = async () => {
-    // Optimistically clear local state immediately to give instant feedback
-    setUser(null);
-    notify("Logged out successfully", "info");
-
-    try {
-        await supabase.auth.signOut();
-    } catch (error) {
-        console.error("Error signing out:", error);
-        // User is already cleared locally, so no need to alert on error unless debugging
-    }
-  };
-
-  // Removed useMemo wrapper to prevent stale closure issues
-  const value = { user, login, logout, register, loading };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
 
 // --- NOTIFICATION CONTEXT --- //
 interface NotificationContextType {
@@ -616,14 +421,28 @@ const BottomNav = () => {
 
 const Header = ({ title, showBack = false }: { title: string, showBack?: boolean }) => {
     const navigate = useNavigate();
+    const { user } = useAuth();
+
     return (
-        <header className="sticky top-0 bg-white shadow-sm z-10 p-4 flex items-center">
-            {showBack && (
-                <button onClick={() => navigate(-1)} className="absolute left-4">
-                    <ChevronLeftIcon className="w-6 h-6 text-gray-600" />
-                </button>
+        <header className="sticky top-0 bg-white shadow-sm z-10 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center min-w-0">
+                {showBack && (
+                    <button onClick={() => navigate(-1)} className="mr-3">
+                        <ChevronLeftIcon className="w-6 h-6 text-gray-600" />
+                    </button>
+                )}
+                <h1 className="text-xl font-bold text-gray-800 truncate">{title}</h1>
+            </div>
+            {user && (
+                <div className="flex flex-col items-end ml-3 text-xs leading-tight">
+                    <span className="font-semibold text-gray-800 truncate max-w-[140px]">
+                        {user.name || user.email}
+                    </span>
+                    <span className="uppercase tracking-wide text-[10px] text-green-600">
+                        {user.role}
+                    </span>
+                </div>
             )}
-            <h1 className="text-xl font-bold text-center text-gray-800 flex-grow">{title}</h1>
         </header>
     );
 };
@@ -638,7 +457,7 @@ const LoginModal = ({
     onClose: () => void; 
     onLoginSuccess: () => void;
 }) => {
-    const { login } = useAuth();
+    const { loginWithPassword } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -652,7 +471,7 @@ const LoginModal = ({
             return;
         }
         setIsLoading(true);
-        const success = await login(email, password);
+        const { success } = await loginWithPassword(email, password);
         setIsLoading(false);
         if (success) {
             onLoginSuccess();
@@ -732,15 +551,15 @@ const LoginModal = ({
 const LoginScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading } = useAuth();
+    const { user, isAuthLoading } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (user && !loading) {
+    useEffect(() => {
+    if (user && !isAuthLoading) {
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
     }
-  }, [user, loading, navigate, location]);
+    }, [user, isAuthLoading, navigate, location]);
 
   const handleLoginSuccess = () => {
       setIsModalOpen(false);
@@ -748,7 +567,7 @@ const LoginScreen = () => {
       navigate(from, { replace: true });
   }
 
-  if (loading) return null;
+    if (isAuthLoading) return null;
 
   return (
     <>
@@ -775,7 +594,7 @@ const LoginScreen = () => {
 const AdminLoginScreen = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, login } = useAuth();
+    const { user, loginWithPassword } = useAuth();
     const { users } = useData();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -799,7 +618,7 @@ const AdminLoginScreen = () => {
         }
 
         setIsLoading(true);
-        const success = await login(email, password);
+        const { success } = await loginWithPassword(email, password);
         setIsLoading(false);
 
         if (success) {
@@ -949,7 +768,7 @@ const OnboardingScreen = () => {
 };
 
 const FarmerRegistrationScreen = () => {
-    const { register, user } = useAuth();
+    const { registerWithPassword, user, setIntendedRole } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', farmSize: '' });
     const [error, setError] = useState('');
@@ -960,6 +779,10 @@ const FarmerRegistrationScreen = () => {
             navigate('/dashboard', { replace: true });
         }
     }, [user, navigate]);
+
+    useEffect(() => {
+        setIntendedRole(UserRole.FARMER);
+    }, [setIntendedRole]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -972,15 +795,20 @@ const FarmerRegistrationScreen = () => {
             setError('All fields are required.');
             return;
         }
-        setIsSubmitting(true);
-        try {
-            await register({ ...formData, role: UserRole.FARMER });
-            navigate('/dashboard', { replace: true });
-        } catch (err: any) {
-             setError(err.message || 'Registration failed.');
-        } finally {
-            setIsSubmitting(false);
-        }
+                setIsSubmitting(true);
+                try {
+                        const { success } = await registerWithPassword(
+                            { name: formData.name, email: formData.email, role: UserRole.FARMER },
+                            formData.password
+                        );
+                        if (success) {
+                            navigate('/dashboard', { replace: true });
+                        }
+                } catch (err: any) {
+                         setError(err.message || 'Registration failed.');
+                } finally {
+                        setIsSubmitting(false);
+                }
     };
 
     return (
@@ -1011,7 +839,7 @@ const FarmerRegistrationScreen = () => {
 };
 
 const VendorRegistrationScreen = () => {
-    const { register, user } = useAuth();
+    const { registerWithPassword, user, setIntendedRole } = useAuth();
     const navigate = useNavigate();
     const [formData, setFormData] = useState({ name: '', email: '', password: '', location: '', businessName: '' });
     const [error, setError] = useState('');
@@ -1022,6 +850,10 @@ const VendorRegistrationScreen = () => {
             navigate('/dashboard', { replace: true });
         }
     }, [user, navigate]);
+
+    useEffect(() => {
+        setIntendedRole(UserRole.VENDOR);
+    }, [setIntendedRole]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -1036,8 +868,13 @@ const VendorRegistrationScreen = () => {
         }
         setIsSubmitting(true);
         try {
-            await register({ ...formData, role: UserRole.VENDOR });
-            navigate('/dashboard', { replace: true });
+            const { success } = await registerWithPassword(
+              { name: formData.name, email: formData.email, role: UserRole.VENDOR },
+              formData.password
+            );
+            if (success) {
+              navigate('/dashboard', { replace: true });
+            }
         } catch (err: any) {
             setError(err.message || 'Registration failed.');
         } finally {
@@ -1089,14 +926,11 @@ const DashboardScreen = () => {
   const activeContracts = relevantContracts.filter(c => c.status === ContractStatus.ACTIVE || c.status === ContractStatus.DELIVERY_CONFIRMED);
   const myProduce = produce.filter(p => p.farmerId === user.id);
   
-  const greeting = `Good afternoon, ${(user.name || '').split(' ')[0]}!`;
-
   return (
     <Layout>
-      <Header title="Dashboard" />
+            <Header title="Dashboard" />
       <div className="p-4">
-        <div className="flex justify-between items-center mb-4">
-             <h2 className="text-2xl font-semibold text-gray-700">{greeting}</h2>
+                <div className="flex justify-end items-center mb-4">
              <button onClick={handleRefresh} className={`p-2 bg-white rounded-full shadow-sm hover:shadow-md ${isRefreshing ? 'animate-spin' : ''}`}>
                  <RefreshCwIcon className="w-5 h-5 text-gray-600"/>
              </button>

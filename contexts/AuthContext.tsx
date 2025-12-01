@@ -89,15 +89,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [users, user]);
 
   // Ensure profile exists (for OTP or first password login)
-  const ensureProfile = async (email: string) => {
+  const ensureProfile = async (
+    email: string,
+    opts?: { name?: string; role?: UserRole }
+  ) => {
     const authUser = (await supabase.auth.getUser()).data.user;
     if (!authUser) return null;
     const existing = users.find(u => u.id === authUser.id);
     if (existing) return existing;
-    const role = intendedRole || UserRole.VENDOR; // fallback vendor
+    const role = opts?.role || intendedRole || UserRole.VENDOR; // fallback vendor
+    const name = opts?.name || email.split('@')[0];
     const newUser: User = {
       id: authUser.id,
-      name: email.split('@')[0],
+      name,
       email: normalizeEmail(email),
       role,
       location: '',
@@ -210,7 +214,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // If session exists immediately, create profile row now; otherwise wait until login
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session) {
-        await ensureProfile(email);
+        await ensureProfile(email, { name: profileData.name, role: profileData.role });
         toast.success('Account created');
       } else {
         toast.info('Check your email to confirm your account');
