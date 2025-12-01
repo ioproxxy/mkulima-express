@@ -1,6 +1,6 @@
 // Data Context with Supabase Integration
 import React, { useState, useContext, createContext, useMemo, useEffect } from 'react';
-import { User, Produce, Contract, Transaction, Message, ContractStatus, TransactionDirection, ContractStatusEntry } from '../types';
+import { User, Produce, Contract, Transaction, Message, ContractStatus, TransactionType } from '../types';
 import { dbOperations, subscribeToMessages } from '../supabaseHelpers';
 import { toast } from 'react-toastify';
 
@@ -12,7 +12,7 @@ interface DataContextType {
   messages: Message[];
   updateUser: (updatedUser: User) => Promise<void>;
   updateContract: (updatedContract: Contract) => Promise<void>;
-  addContract: (newContract: Contract) => Promise<void>;
+  addContract: (newContract: Contract) => Promise<Contract>;
   addProduce: (newProduce: Produce) => Promise<void>;
   addUser: (newUser: User) => Promise<User>;
   addTransaction: (newTransaction: Transaction) => Promise<void>;
@@ -100,10 +100,11 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const addContract = async (newContract: Contract) => {
+  const addContract = async (newContract: Contract): Promise<Contract> => {
     try {
       const result = await dbOperations.createContract(newContract);
       setContracts(prev => [result, ...prev]);
+      return result;
     } catch (error: any) {
       toast.error('Failed to create contract: ' + error.message);
       throw error;
@@ -173,8 +174,8 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
     const txn: Transaction = {
       id: '',
       userId,
-      amount,
-      type: amount < 0 ? TransactionDirection.DEBIT : TransactionDirection.CREDIT,
+      amount: Math.abs(amount),
+      type: amount < 0 ? TransactionType.PAYMENT_SENT : TransactionType.PAYMENT_RECEIVED,
       description,
       date: new Date().toISOString(),
       relatedContractId,
@@ -190,7 +191,7 @@ export const DataProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const pushStatus = (c: Contract, next: ContractStatus): Contract => {
-    const history: ContractStatusEntry[] = c.statusHistory ? [...c.statusHistory] : [];
+    const history: { status: ContractStatus; timestamp: string }[] = c.statusHistory ? [...c.statusHistory] : [];
     history.push({ status: next, timestamp: new Date().toISOString() });
     return { ...c, status: next, statusHistory: history };
   };

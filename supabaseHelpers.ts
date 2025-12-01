@@ -202,11 +202,29 @@ export const dbOperations = {
   },
   
   async createContract(contract: any) {
-    const base = toSnakeCase(contract);
-    if (!base.status_history) base.status_history = JSON.stringify([{ status: contract.status, timestamp: new Date().toISOString() }]);
+    // Build payload explicitly to satisfy RLS and snake_case naming.
+    // Do NOT send client-generated id; let DB default generate.
+    const payload = {
+      produce_id: contract.produceId,
+      produce_name: contract.produceName,
+      farmer_id: contract.farmerId,
+      vendor_id: contract.vendorId,
+      farmer_name: contract.farmerName,
+      vendor_name: contract.vendorName,
+      quantity: contract.quantity,
+      total_price: contract.totalPrice,
+      delivery_deadline: contract.deliveryDeadline,
+      status: contract.status,
+      status_history: contract.statusHistory ? JSON.stringify(contract.statusHistory) : JSON.stringify([{ status: contract.status, timestamp: new Date().toISOString() }]),
+      payment_date: contract.paymentDate || null,
+      dispute_reason: contract.disputeReason || null,
+      dispute_filed_by: contract.disputeFiledBy || null,
+      logistics: contract.logistics ? JSON.stringify(contract.logistics) : null,
+    };
+    
     const { data, error } = await supabase
       .from('contracts')
-      .insert(base)
+      .insert(payload)
       .select()
       .single();
     if (error) throw error;
