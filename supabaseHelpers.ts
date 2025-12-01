@@ -209,27 +209,37 @@ export const dbOperations = {
 
     const base = toSnakeCase(contract);
     
-    // Verify farmer_id by fetching the produce from database
+    // Verify produce_id is provided and fetch farmer_id from database
     // This ensures we use the actual UUID from the database, not client-provided data
-    if (base.produce_id) {
-      const { data: produceData, error: produceError } = await supabase
-        .from('produce')
-        .select('farmer_id')
-        .eq('id', base.produce_id)
-        .single();
-      
-      if (produceError) {
-        throw new Error('Invalid produce ID or produce not found');
-      }
-      
-      // Override farmer_id with the value from the database
-      base.farmer_id = produceData.farmer_id;
+    if (!base.produce_id) {
+      throw new Error('produce_id is required to create a contract');
     }
+    
+    const { data: produceData, error: produceError } = await supabase
+      .from('produce')
+      .select('farmer_id')
+      .eq('id', base.produce_id)
+      .single();
+    
+    if (produceError) {
+      if (produceError.code === 'PGRST116') {
+        throw new Error('Produce not found');
+      }
+      throw new Error('Failed to fetch produce: ' + produceError.message);
+    }
+    
+    // Override farmer_id with the value from the database
+    base.farmer_id = produceData.farmer_id;
     
     // Security: Ensure the authenticated user is either the farmer or vendor
     // The RLS policy will also enforce this, but we check here for better error messages
     if (base.farmer_id !== authUid && base.vendor_id !== authUid) {
       throw new Error('You must be either the farmer or vendor to create this contract');
+    }
+    
+    // Additional validation: ensure vendor_id is provided
+    if (!base.vendor_id) {
+      throw new Error('vendor_id is required to create a contract');
     }
     
     if (!base.status_history) base.status_history = JSON.stringify([{ status: contract.status, timestamp: new Date().toISOString() }]);
