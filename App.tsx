@@ -1738,6 +1738,10 @@ const NewContractScreen = () => {
 
         setIsSubmitting(true);
         try {
+            const safeVendorName = (user.name && user.name.trim().length > 0)
+                ? user.name
+                : (user.businessName || user.email);
+
             const newContract: Contract = {
                 id: self.crypto.randomUUID(),
                 produceId: selectedProduce.id,
@@ -1745,7 +1749,7 @@ const NewContractScreen = () => {
                 farmerId: selectedProduce.farmerId,
                 vendorId: user.id,
                 farmerName: selectedProduce.farmerName,
-                vendorName: user.name,
+                vendorName: safeVendorName,
                 quantity: quantity,
                 totalPrice: totalPrice,
                 deliveryDeadline: deadline,
@@ -1865,14 +1869,22 @@ const FarmerNewContractScreen = () => {
 
         setIsSubmitting(true);
         try {
+            const safeVendorName = (selectedVendor.name && selectedVendor.name.trim().length > 0)
+                ? selectedVendor.name
+                : (selectedVendor.businessName || selectedVendor.email);
+
+            const safeFarmerName = (user.name && user.name.trim().length > 0)
+                ? user.name
+                : (user.farmSize ? user.name || 'Farmer' : user.email);
+
             const newContract: Contract = {
                 id: self.crypto.randomUUID(),
                 produceId: selectedProduce.id,
                 produceName: selectedProduce.name,
                 farmerId: user.id,
                 vendorId: selectedVendor.id,
-                farmerName: user.name,
-                vendorName: selectedVendor.name,
+                farmerName: safeFarmerName,
+                vendorName: safeVendorName,
                 quantity: quantity,
                 totalPrice: totalPrice,
                 deliveryDeadline: deadline,
