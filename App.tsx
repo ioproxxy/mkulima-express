@@ -1582,7 +1582,7 @@ const DisputeModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (r
 
 const ContractDetailScreen = () => {
   const { id } = useParams();
-  const { contracts, users, updateUser, updateContract, addTransaction, messages, addMessage } = useData();
+    const { contracts, users, confirmDelivery, releaseEscrow, acceptContract, rejectContract, disputeContract, finalizeContract, messages, addMessage } = useData();
   const { user } = useAuth();
   const { notify } = useNotifier();
   const navigate = useNavigate();
@@ -1603,62 +1603,50 @@ const ContractDetailScreen = () => {
     ? users.find(u => u.id === contract.vendorId)
     : users.find(u => u.id === contract.farmerId);
 
-  const handleStatusUpdate = (newStatus: ContractStatus, additionalData?: any) => {
-    let updatedContract: Contract = { 
-        ...contract, 
-        status: newStatus, 
-        statusHistory: [...contract.statusHistory, { status: newStatus, timestamp: new Date().toISOString() }]
+    const handleStatusUpdate = async (newStatus: ContractStatus, additionalData?: any) => {
+        try {
+            if (newStatus === ContractStatus.ACTIVE) {
+                await acceptContract(contract.id);
+                notify("Contract accepted", "success");
+                return;
+            }
+
+            if (newStatus === ContractStatus.CANCELLED) {
+                await rejectContract(contract.id);
+                notify("Offer cancelled", "info");
+                return;
+            }
+
+            if (newStatus === ContractStatus.DELIVERY_CONFIRMED) {
+                await confirmDelivery(contract.id);
+                notify("Delivery confirmed", "success");
+                return;
+            }
+
+            if (newStatus === ContractStatus.PAYMENT_RELEASED) {
+                await releaseEscrow(contract.id);
+                notify("Escrow released to farmer", "success");
+                return;
+            }
+
+            if (newStatus === ContractStatus.COMPLETED) {
+                await finalizeContract(contract.id);
+                notify("Contract completed", "success");
+                return;
+            }
+
+            if (newStatus === ContractStatus.DISPUTED && additionalData) {
+                await disputeContract(contract.id, additionalData.reason, user?.id || "");
+                notify("Contract disputed", "warning");
+                return;
+            }
+
+            notify("Unsupported status update", "error");
+        } catch (error: any) {
+            const message = error?.message || "Failed to update contract status";
+            notify(message, "error");
+        }
     };
-
-    if (newStatus === ContractStatus.DISPUTED && additionalData) {
-        updatedContract.disputeReason = additionalData.reason;
-        updatedContract.disputeFiledBy = user?.id;
-    }
-    
-    // Logic for payment release when status becomes PAYMENT_RELEASED
-    if (newStatus === ContractStatus.PAYMENT_RELEASED) {
-      const farmer = users.find(u => u.id === contract.farmerId);
-      const vendor = users.find(u => u.id === contract.vendorId);
-      
-      if (farmer && vendor && vendor.walletBalance >= contract.totalPrice) {
-        const updatedVendor = { ...vendor, walletBalance: vendor.walletBalance - contract.totalPrice };
-        const updatedFarmer = { ...farmer, walletBalance: farmer.walletBalance + contract.totalPrice };
-
-        updateUser(updatedVendor);
-        updateUser(updatedFarmer);
-        
-        addTransaction({
-            id: self.crypto.randomUUID(),
-            userId: vendor.id,
-            type: TransactionType.PAYMENT_SENT,
-            amount: -contract.totalPrice,
-            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
-            date: new Date().toISOString().split('T')[0],
-            relatedContractId: contract.id,
-        });
-
-        addTransaction({
-            id: self.crypto.randomUUID(),
-            userId: farmer.id,
-            type: TransactionType.PAYMENT_RECEIVED,
-            amount: contract.totalPrice,
-            description: `Payment for ${contract.produceName} (Contract: ${contract.id.slice(0, 8)}...)`,
-            date: new Date().toISOString().split('T')[0],
-            relatedContractId: contract.id,
-        });
-
-        updatedContract.paymentDate = new Date().toISOString().split('T')[0];
-        notify("Payment successfully transferred!", "success");
-
-      } else {
-        notify("Insufficient funds for payment transfer.", "error");
-        return; // Don't update status if payment fails
-      }
-    }
-    
-    updateContract(updatedContract);
-    notify(`Contract status updated to ${newStatus}`, "success");
-  };
 
   const handleDisputeSubmit = (reason: string) => {
       if (!reason.trim()) {
