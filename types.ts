@@ -92,6 +92,12 @@ export enum TransactionType {
   WITHDRAWAL = 'Withdrawal',
 }
 
+// Direction helper for wallet accounting (credit/debit) used in DataContext
+export enum TransactionDirection {
+  CREDIT = 'CREDIT',
+  DEBIT = 'DEBIT',
+}
+
 export interface Transaction {
   id: string;
   userId: string;
